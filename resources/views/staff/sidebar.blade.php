@@ -1,0 +1,7 @@
+<!-- Staff Sidebar Navigation -->
+<a href="{{ route('staff.dashboard') }}" class="sidebar-item {{ request()->routeIs('staff.dashboard') ? 'active' : '' }}">Dashboard</a>
+<a href="{{ route('staff.queue') }}" class="sidebar-item {{ request()->routeIs('staff.queue') ? 'active' : '' }}">Appointment Queue</a>
+<a href="{{ route('staff.prescriptions') }}" class="sidebar-item {{ request()->routeIs('staff.prescriptions*') ? 'active' : '' }}">Prescriptions</a>
+<a href="{{ route('staff.medical-records') }}" class="sidebar-item {{ request()->routeIs('staff.medical-records*') ? 'active' : '' }}">Medical Records</a>
+<a href="{{ route('staff.reports') }}" class="sidebar-item {{ request()->routeIs('staff.reports*') ? 'active' : '' }}">Reports</a>
+<a href="{{ route('staff.notifications') }}" class="sidebar-item {{ request()->routeIs('staff.notifications') ? 'active' : '' }}">Notifications</a>
