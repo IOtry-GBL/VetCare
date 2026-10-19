@@ -66,6 +66,11 @@ test('assigned veterinarian can open the appointment session workspace', functio
         ->assertViewHas('appointment', function (Appointment $appointment) use ($fixture) {
             return $appointment->appointment_id === $fixture['appointment']->appointment_id;
         });
+
+    $this->assertDatabaseHas('consultations', [
+        'consultation_id' => $fixture['consultation']->consultation_id,
+        'status' => 'In Progress',
+    ]);
 });
 
 test('assigned veterinarian can complete an appointment session and save the record', function () {
@@ -135,6 +140,39 @@ test('assigned veterinarian can complete an appointment session and save the rec
     Carbon::setTestNow();
 });
 
+test('assigned veterinarian can save measurements entered with display units', function () {
+    $fixture = makeVeterinarianSessionFixture();
+
+    $response = $this->actingAs($fixture['vet'])
+        ->post(route('vet.appointments.session.store', $fixture['appointment']), [
+            'diagnosis' => 'Mild dehydration',
+            'treatment_plan' => 'Provide fluids and monitor appetite.',
+            'weight' => '6.5 kg',
+            'temp' => '38.6°C',
+            'fee' => '₱850.00',
+            'prescriptions' => [['medication_name' => '', 'dosage' => '', 'frequency' => '', 'duration' => '']],
+        ]);
+
+    $response->assertRedirect(route('vet.appointments.session', $fixture['appointment']));
+
+    $this->assertDatabaseHas('appointments', [
+        'appointment_id' => $fixture['appointment']->appointment_id,
+        'status' => 'Completed',
+    ]);
+
+    $this->assertDatabaseHas('medical_records', [
+        'consultation_id' => $fixture['consultation']->consultation_id,
+        'weight' => 6.5,
+        'temp' => 38.6,
+        'fee' => 850,
+    ]);
+
+    $this->assertDatabaseHas('pets', [
+        'pet_id' => $fixture['pet']->pet_id,
+        'weight' => 6.5,
+    ]);
+});
+
 test('assigned veterinarian can add multiple prescriptions from one appointment session', function () {
     $fixture = makeVeterinarianSessionFixture();
 
@@ -189,6 +227,11 @@ test('did not arrive marks the appointment as missed for the pet owner', functio
 
     $this->assertDatabaseHas('appointments', [
         'appointment_id' => $fixture['appointment']->appointment_id,
+        'status' => 'Missed',
+    ]);
+
+    $this->assertDatabaseHas('consultations', [
+        'consultation_id' => $fixture['consultation']->consultation_id,
         'status' => 'Missed',
     ]);
 

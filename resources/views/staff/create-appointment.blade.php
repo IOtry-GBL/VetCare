@@ -65,16 +65,18 @@
             </div>
 
             <div style="margin-bottom: 1.5rem;">
-                <label for="appointment_date" style="display: block; margin-bottom: 0.5rem; font-weight: 500;">Appointment Date & Time *</label>
-                <input 
-                    type="datetime-local" 
-                    id="appointment_date" 
-                    name="appointment_date" 
-                    style="width: 100%; padding: 0.75rem; border: 1px solid #d1d5db; border-radius: 0.375rem;"
-                    value="{{ old('appointment_date') }}"
-                    required
-                >
+                <label style="display: block; margin-bottom: 0.5rem; font-weight: 500;">Appointment Date & Time *</label>
+                @include('components.appointment-calendar', [
+                    'calendarId' => 'staff-create-calendar',
+                    'viewer' => 'staff',
+                    'mode' => 'booking',
+                    'bookings' => $calendarBookings,
+                    'slots' => $calendarSlots,
+                ])
                 @error('appointment_date')
+                    <p style="color: var(--color-emergency); font-size: 0.875rem; margin-top: 0.25rem;">{{ $message }}</p>
+                @enderror
+                @error('appointment_time')
                     <p style="color: var(--color-emergency); font-size: 0.875rem; margin-top: 0.25rem;">{{ $message }}</p>
                 @enderror
             </div>

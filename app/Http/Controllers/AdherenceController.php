@@ -8,6 +8,7 @@ use App\Models\EPrescription;
 use App\Services\AdherenceService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Carbon\Carbon;
 
 class AdherenceController extends Controller
@@ -23,6 +24,21 @@ class AdherenceController extends Controller
             ->activeWindow()
             ->count();
 
+        $pendingNotificationsList = AdherenceNotification::where('user_id', $user->user_id)
+            ->activeWindow()
+            ->with(['adherenceLog.prescription.medicalRecord.pet'])
+            ->orderBy('scheduled_at')
+            ->limit(10)
+            ->get();
+
+        $upcomingNotificationsList = AdherenceNotification::where('user_id', $user->user_id)
+            ->where('status', 'Pending')
+            ->where('scheduled_at', '>', now())
+            ->with(['adherenceLog.prescription.medicalRecord.pet'])
+            ->orderBy('scheduled_at')
+            ->limit(10)
+            ->get();
+
         $recentMissed = AdherenceNotification::where('user_id', $user->user_id)
             ->where('status', 'Missed')
             ->whereDate('scheduled_at', '>=', now()->subDays(30))
@@ -32,6 +48,8 @@ class AdherenceController extends Controller
 
         return view('pet-owner.adherence-dashboard', [
             'pendingNotifications' => $pendingNotifications,
+            'pendingNotificationsList' => $pendingNotificationsList,
+            'upcomingNotificationsList' => $upcomingNotificationsList,
             'recentMissed' => $recentMissed,
             'confirmationRate' => $confirmationRate,
         ]);
@@ -50,11 +68,6 @@ class AdherenceController extends Controller
         $prescription = $adherenceLog->prescription;
         $user = $prescription->medicalRecord->pet->owner;
 
-        // Check if reminder already exists
-        if (AdherenceNotification::where('adherence_id', $adherenceLog->adherence_id)->exists()) {
-            return response()->json(['message' => 'Reminder already exists'], 409);
-        }
-
         $scheduledTime = Carbon::parse($adherenceLog->scheduled_datetime);
         $deadlineTime = AdherenceService::buildConfirmationDeadline($scheduledTime);
 
@@ -64,16 +77,22 @@ class AdherenceController extends Controller
             'is_notified' => true,
         ]);
 
-        // Create notification
-        $notification = AdherenceNotification::create([
-            'user_id' => $user->user_id,
-            'adherence_id' => $adherenceLog->adherence_id,
-            'medication_name' => $prescription->medication_name,
-            'dosage' => $prescription->dosage,
-            'scheduled_at' => $scheduledTime,
-            'confirmation_deadline' => $deadlineTime,
-            'status' => 'Pending',
-        ]);
+        // Use updateOrCreate to prevent race condition and duplicate notifications
+        $notification = AdherenceNotification::updateOrCreate(
+            ['adherence_id' => $adherenceLog->adherence_id],
+            [
+                'user_id' => $user->user_id,
+                'medication_name' => $prescription->medication_name,
+                'dosage' => $prescription->dosage,
+                'scheduled_at' => $scheduledTime,
+                'confirmation_deadline' => $deadlineTime,
+                'status' => 'Pending',
+            ]
+        );
+
+        if ($notification->wasRecentlyCreated && $notification->status === 'Pending') {
+            AdherenceService::sendReminderEmail($notification);
+        }
 
         return response()->json([
             'message' => 'Reminder created successfully',
@@ -90,41 +109,61 @@ class AdherenceController extends Controller
 
         // Verify user authorization
         if ($notification->user_id !== Auth::user()->user_id) {
-            return response()->json(['error' => 'Unauthorized'], 403);
+            return $this->confirmationResponse($request, 'Unauthorized', 403);
         }
 
         // Check if already confirmed or missed
         if ($notification->status !== 'Pending') {
-            return response()->json(['error' => 'This notification is no longer pending'], 400);
+            return $this->confirmationResponse($request, 'This notification is no longer pending', 400);
         }
 
         if (now()->lt($notification->scheduled_at)) {
-            return response()->json(['error' => 'Confirmation is not available until the scheduled medication time.'], 400);
+            return $this->confirmationResponse(
+                $request,
+                'Confirmation is not available until the scheduled medication time.',
+                400
+            );
         }
 
         // Check if deadline has passed
         if (now()->greaterThan($notification->confirmation_deadline)) {
             $notification->markAsMissed();
-            return response()->json(['error' => 'Confirmation window has expired'], 400);
+
+            return $this->confirmationResponse($request, 'Confirmation window has expired', 400);
         }
 
-        $request->validate([
+        $validated = $request->validate([
             'notes' => 'nullable|string|max:500',
         ]);
 
         // Confirm adherence
-        if ($notification->confirm()) {
-            if ($request->notes) {
-                $notification->update(['notes' => $request->notes]);
+        if ($notification->confirm($validated['notes'] ?? null)) {
+            $notification->refresh();
+
+            return $this->confirmationResponse($request, 'Adherence confirmed successfully', 200, $notification);
+        }
+
+        return $this->confirmationResponse($request, 'Unable to confirm adherence', 400);
+    }
+
+    private function confirmationResponse(
+        Request $request,
+        string $message,
+        int $status,
+        ?AdherenceNotification $notification = null
+    ) {
+        if ($request->expectsJson()) {
+            if ($status >= 400) {
+                return response()->json(['error' => $message], $status);
             }
 
             return response()->json([
-                'message' => 'Adherence confirmed successfully',
-                'notification' => $notification,
-            ]);
+                'message' => $message,
+                'notification' => $notification?->toArray(),
+            ], $status);
         }
 
-        return response()->json(['error' => 'Unable to confirm adherence'], 400);
+        return back()->with($status >= 400 ? 'error' : 'success', $message);
     }
 
     /**
@@ -154,7 +193,7 @@ class AdherenceController extends Controller
         }
 
         if ($adherenceLog->isExpiredForConfirmation()) {
-            $this->markDoseAsMissed($adherenceLog);
+            AdherenceService::markDoseAsMissed($adherenceLog);
 
             return back()->with('error', 'The confirmation window has expired for this dose.');
         }
@@ -162,6 +201,8 @@ class AdherenceController extends Controller
         if (!$adherenceLog->isAvailableForConfirmation()) {
             return back()->with('error', 'This dose is no longer pending confirmation.');
         }
+
+        AdherenceService::markExpiredPendingDosesForPrescription($adherenceLog->prescription);
 
         $confirmedAt = now();
         $deadline = $adherenceLog->resolvedConfirmationDeadline();
@@ -309,22 +350,5 @@ class AdherenceController extends Controller
             'prescription' => $prescription,
             'adherenceLogs' => $adherenceLogs,
         ]);
-    }
-
-    private function markDoseAsMissed(AdherenceLog $adherenceLog): void
-    {
-        $adherenceLog->update([
-            'confirmation_deadline' => $adherenceLog->resolvedConfirmationDeadline(),
-            'intake_status' => 'Missed',
-        ]);
-
-        $notification = $adherenceLog->notification;
-
-        if ($notification) {
-            $notification->update([
-                'confirmation_deadline' => $adherenceLog->resolvedConfirmationDeadline(),
-                'status' => 'Missed',
-            ]);
-        }
     }
 }

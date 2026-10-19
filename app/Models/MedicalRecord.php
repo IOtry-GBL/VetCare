@@ -12,9 +12,24 @@ class MedicalRecord extends Model
     use HasFactory;
 
     protected $primaryKey = 'record_id';
-    protected $fillable = ['pet_id', 'consultation_id', 'diagnosis', 'treatment_plan', 'vaccination_notes', 'follow_up_date'];
+    protected $fillable = [
+        'pet_id',
+        'consultation_id',
+        'diagnosis',
+        'treatment_plan',
+        'vaccination_notes',
+        'follow_up_date',
+        'weight',
+        'temp',
+        'food',
+        'environment',
+        'fee',
+    ];
     protected $casts = [
         'follow_up_date' => 'date',
+        'weight' => 'decimal:2',
+        'temp' => 'decimal:2',
+        'fee' => 'decimal:2',
     ];
 
     public function pet(): BelongsTo

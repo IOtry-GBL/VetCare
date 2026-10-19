@@ -38,6 +38,7 @@ class ProfileController extends Controller
             'full_name' => ['required', 'string', 'max:100'],
             'email' => ['required', 'email', 'max:255', Rule::unique('users', 'email')->ignore($user->user_id, 'user_id')],
             'contact_no' => ['nullable', 'string', 'max:20'],
+            'address' => ['nullable', 'string', 'max:1000'],
             'password' => ['nullable', 'string', 'min:8', 'confirmed'],
         ]);
 
@@ -45,6 +46,7 @@ class ProfileController extends Controller
             'full_name' => $validated['full_name'],
             'email' => $validated['email'],
             'contact_no' => $validated['contact_no'] ?? null,
+            'address' => $validated['address'] ?? null,
         ];
 
         if (!empty($validated['password'])) {

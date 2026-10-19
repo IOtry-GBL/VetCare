@@ -2,16 +2,16 @@
 
 namespace App\Models;
 
-// use Illuminate\Contracts\Auth\MustVerifyEmail;
+use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 
-class User extends Authenticatable
+class User extends Authenticatable implements MustVerifyEmail
 {
     /** @use HasFactory<\Database\Factories\UserFactory> */
-    use HasFactory, Notifiable;
+    use HasFactory, Notifiable, \Illuminate\Auth\MustVerifyEmail;
 
     protected $primaryKey = 'user_id';
 
@@ -25,6 +25,7 @@ class User extends Authenticatable
         'email',
         'password',
         'contact_no',
+        'address',
         'role',
         'status',
         'is_super_admin',
@@ -53,6 +54,8 @@ class User extends Authenticatable
             'password' => 'hashed',
             'role' => 'string',
             'status' => 'string',
+            'is_super_admin' => 'boolean',
+            'impersonating_role' => 'string',
         ];
     }
 
@@ -197,6 +200,20 @@ class User extends Authenticatable
     public function isSuperAdmin()
     {
         return $this->is_super_admin === true || $this->is_super_admin === 1;
+    }
+
+    /**
+     * Determine whether the user can access a named permission.
+     */
+    public function canAccessPermission(string $permission): bool
+    {
+        if ($this->isSuperAdmin()) {
+            return true;
+        }
+
+        $rolePermissions = config('super-admin.roles.' . $this->role . '.permissions', []);
+
+        return in_array('all', $rolePermissions, true) || in_array($permission, $rolePermissions, true);
     }
 
     /**

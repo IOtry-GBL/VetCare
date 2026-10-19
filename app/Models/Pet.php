@@ -13,7 +13,8 @@ class Pet extends Model
     use HasFactory;
 
     protected $primaryKey = 'pet_id';
-    protected $fillable = ['user_id', 'pet_name', 'species', 'breed', 'date_of_birth', 'weight', 'sex'];
+    protected $fillable = ['user_id', 'pet_name', 'species', 'breed', 'color', 'date_of_birth', 'weight', 'sex'];
+    protected $casts = ['date_of_birth' => 'date'];
 
     public function getIdAttribute(): ?int
     {
@@ -35,6 +36,28 @@ class Pet extends Model
         return Carbon::parse($dateOfBirth)->age;
     }
 
+    public function getAgeDisplayAttribute(): ?string
+    {
+        if (!$this->date_of_birth) {
+            return null;
+        }
+
+        $totalMonths = (int) $this->date_of_birth->diffInMonths(now());
+        if ($totalMonths < 12) {
+            return $totalMonths === 0 ? 'Less than 1 month' : $totalMonths.' months';
+        }
+
+        $years = intdiv($totalMonths, 12);
+        $remainingMonths = $totalMonths % 12;
+        $age = $years.' '.($years === 1 ? 'year' : 'years');
+
+        if ($remainingMonths > 0) {
+            $age .= ', '.$remainingMonths.' '.($remainingMonths === 1 ? 'month' : 'months');
+        }
+
+        return $age;
+    }
+
     public function owner(): BelongsTo
     {
         return $this->belongsTo(User::class, 'user_id');
@@ -43,11 +66,6 @@ class Pet extends Model
     public function appointments(): HasMany
     {
         return $this->hasMany(Appointment::class, 'pet_id');
-    }
-
-    public function symptomLogs(): HasMany
-    {
-        return $this->hasMany(SymptomLog::class, 'pet_id');
     }
 
     public function medicalRecords(): HasMany
@@ -76,4 +94,3 @@ class Pet extends Model
         return $query->where('id', null); // No access
     }
 }
-

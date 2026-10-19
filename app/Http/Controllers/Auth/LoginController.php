@@ -3,11 +3,26 @@
 namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
+use App\Models\SystemSetting;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 
 class LoginController extends Controller
 {
+    public function show()
+    {
+        $defaults = config('super-admin.settings', []);
+
+        return view('auth.login', [
+            'clinic' => [
+                'name' => SystemSetting::getValue('clinic_name', $defaults['clinic_name'] ?? 'Digos Veterinary Clinic and Supply'),
+                'phone' => SystemSetting::getValue('clinic_phone', $defaults['clinic_phone'] ?? ''),
+                'address' => SystemSetting::getValue('clinic_address', $defaults['clinic_address'] ?? ''),
+                'description' => SystemSetting::getValue('clinic_description', $defaults['clinic_description'] ?? ''),
+            ],
+        ]);
+    }
+
     public function store(Request $request)
     {
         $credentials = $request->validate([
@@ -19,6 +34,10 @@ class LoginController extends Controller
             $request->session()->regenerate();
             
             $user = auth()->user();
+
+            if ($user->isPetOwner() && ! $user->hasVerifiedEmail()) {
+                return redirect()->route('verification.notice');
+            }
             
             // Redirect based on role
             if ($user->isSuperAdmin()) {

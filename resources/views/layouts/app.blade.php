@@ -3,7 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>@yield('title', 'VetCare Clinic')</title>
+    <meta name="csrf-token" content="{{ csrf_token() }}">
+    <title>@yield('title', 'Digos Veterinary Clinic & Supply')</title>
     @if (file_exists(public_path('build/manifest.json')) || file_exists(public_path('hot')))
         @vite(['resources/css/app.css', 'resources/js/app.js'])
     @endif
@@ -102,20 +103,41 @@
         .sidebar-brand {
             position: relative;
             z-index: 1;
-            display: grid;
-            gap: 0.45rem;
-            padding-bottom: 1.35rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0.8rem 0.75rem 1.4rem;
             border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+            margin-bottom: 0.85rem;
+        }
+
+        .brand-lockup {
+            display: grid;
+            gap: 0.22rem;
+        }
+
+        .brand-mark {
+            display: block;
+            width: clamp(4.5rem, 10vw, 12.5rem);
+            aspect-ratio: 1;
+            max-width: 100%;
+            height: auto;
+            object-fit: cover;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.08);
+            padding: 0.35rem;
+            box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.2), 0 12px 22px rgba(3, 20, 25, 0.18);
+            border: 1px solid rgba(255, 255, 255, 0.14);
         }
 
         .sidebar-brand strong {
-            font: 700 1.2rem/1.1 var(--font-heading);
-            letter-spacing: 0.03em;
+            font: 800 1.15rem/1.1 var(--font-heading);
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
         }
 
         .sidebar-brand span {
-            color: rgba(255, 255, 255, 0.66);
-            font-size: 0.92rem;
+            display: none;
         }
 
         .sidebar-nav {
@@ -160,11 +182,11 @@
 
         .app-main {
             min-width: 0;
+            overflow: visible;
         }
 
         .topbar {
-            position: sticky;
-            top: 1.5rem;
+            position: relative;
             z-index: 20;
             display: flex;
             align-items: center;
@@ -177,6 +199,7 @@
             background: rgba(255, 255, 255, 0.76);
             backdrop-filter: blur(18px);
             box-shadow: 0 16px 38px rgba(23, 49, 61, 0.09);
+            overflow: visible;
         }
 
         .topbar-copy {
@@ -199,6 +222,7 @@
 
         .profile-menu {
             position: relative;
+            z-index: 50;
         }
 
         .profile-menu summary {
@@ -257,6 +281,7 @@
             border-radius: var(--shell-radius-md);
             background: rgba(255, 255, 255, 0.98);
             box-shadow: 0 22px 48px rgba(23, 49, 61, 0.16);
+            z-index: 50;
         }
 
         .dropdown-link,
@@ -296,6 +321,7 @@
         .widget,
         .surface {
             position: relative;
+            min-width: 0;
             background: var(--shell-panel);
             border: 1px solid rgba(255, 255, 255, 0.54);
             border-radius: var(--shell-radius-xl);
@@ -407,6 +433,62 @@
         .form-grid {
             display: grid;
             gap: 1rem;
+        }
+
+        .compact-shell {
+            padding: 0.75rem;
+        }
+
+        .compact-shell .card,
+        .compact-shell .surface-header,
+        .compact-shell .alert {
+            padding: 1rem;
+        }
+
+        .compact-shell h1 {
+            font-size: 1.4rem;
+        }
+
+        .compact-shell .section-copy {
+            margin-top: 0.55rem;
+            font-size: 0.95rem;
+        }
+
+        .compact-shell .action-row {
+            display: grid;
+            gap: 0.75rem;
+        }
+
+        .compact-shell .btn {
+            min-height: 42px;
+            padding: 0.72rem 0.95rem;
+            width: 100%;
+        }
+
+        @media (max-width: 640px) {
+            .compact-shell {
+                margin: 0;
+                min-height: 100vh;
+                padding: 0.75rem 0.75rem 1rem;
+            }
+
+            .compact-shell .card {
+                border-radius: 1rem;
+                box-shadow: 0 18px 32px rgba(23, 49, 61, 0.15);
+            }
+
+            .compact-shell .surface-header {
+                gap: 0.65rem;
+            }
+
+            .compact-shell .action-row {
+                gap: 0.65rem;
+            }
+
+            .compact-shell .btn {
+                min-height: 40px;
+                padding: 0.65rem 0.9rem;
+            }
         }
 
         .grid,
@@ -839,6 +921,131 @@
             border-bottom: none;
         }
 
+        .super-admin-page {
+            display: grid;
+            gap: 1.25rem;
+        }
+
+        .super-admin-section {
+            display: grid;
+            gap: 0.9rem;
+        }
+
+        .super-admin-section-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 0.9rem;
+            flex-wrap: wrap;
+        }
+
+        .super-admin-list-shell {
+            display: grid;
+            gap: 0.9rem;
+        }
+
+        .super-admin-list-toolbar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 0.75rem;
+            flex-wrap: wrap;
+        }
+
+        .super-admin-list-toolbar .form-control,
+        .super-admin-list-toolbar .form-select {
+            min-width: 220px;
+        }
+
+        .super-admin-list-toolbar .toolbar-group {
+            display: flex;
+            gap: 0.65rem;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .super-admin-sort-button {
+            border: 1px solid #d1d5db;
+            border-radius: 999px;
+            background: #f8fafc;
+            color: #334155;
+            padding: 0.35rem 0.7rem;
+            font-size: 0.84rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .super-admin-sort-button.active {
+            background: #2563eb;
+            color: #fff;
+            border-color: #2563eb;
+        }
+
+        .super-admin-list-item {
+            padding: 0.95rem 1rem;
+            border: 1px solid #e5e7eb;
+            border-radius: 0.9rem;
+            background: #fff;
+            box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+        }
+
+        .super-admin-list-item .meta-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 0.75rem;
+            flex-wrap: wrap;
+            color: #6b7280;
+            font-size: 0.95rem;
+        }
+
+        .scrollable-compact-list {
+            display: grid;
+            gap: 0.75rem;
+            max-height: 25.5rem;
+            overflow-y: auto;
+            padding-right: 0.25rem;
+        }
+
+        .scrollable-compact-list::-webkit-scrollbar {
+            width: 0.45rem;
+        }
+
+        .scrollable-compact-list::-webkit-scrollbar-thumb {
+            background: rgba(23, 49, 61, 0.2);
+            border-radius: 999px;
+        }
+
+        .super-admin-pagination {
+            display: flex;
+            justify-content: flex-end;
+            align-items: center;
+            gap: 0.5rem;
+            flex-wrap: wrap;
+        }
+
+        .super-admin-pagination button {
+            padding: 0.45rem 0.75rem;
+            border: 1px solid #d1d5db;
+            border-radius: 0.65rem;
+            background: #fff;
+            color: #111827;
+            cursor: pointer;
+        }
+
+        .super-admin-pagination button:disabled {
+            opacity: 0.55;
+            cursor: not-allowed;
+        }
+
+        .super-admin-empty-state {
+            padding: 1rem;
+            color: #6b7280;
+            border: 1px dashed #d1d5db;
+            border-radius: 0.85rem;
+            background: #f8fafc;
+        }
+
         @media (max-width: 1100px) {
             .app-shell {
                 grid-template-columns: 1fr;
@@ -856,41 +1063,419 @@
 
         @media (max-width: 768px) {
             .app-shell {
+                grid-template-columns: 1fr;
                 padding: 1rem;
                 gap: 1rem;
+                min-height: 100vh;
             }
 
-            .topbar,
-            .hero-row,
-            .section-head,
-            .split-head,
-            .action-row,
-            .list-card,
-            .record-card,
-            .session-card,
-            .appointment-card {
-                flex-direction: column;
+            .app-sidebar {
+                position: sticky;
+                top: 0;
+                z-index: 100;
+                min-height: auto;
+                padding: 1rem;
+                border-radius: var(--shell-radius-lg);
+                margin-bottom: 1rem;
+            }
+
+            .sidebar-brand {
+                padding: 0.6rem 0.5rem 0.9rem;
+                margin-bottom: 0.8rem;
+            }
+
+            .brand-mark {
+                width: clamp(3.2rem, 18vw, 5.3rem);
+                padding: 0.2rem;
+            }
+
+            .sidebar-brand strong {
+                font-size: 1rem;
+            }
+
+            .sidebar-brand span {
+                display: none;
+            }
+
+            .sidebar-nav {
+                display: flex;
+                gap: 0.5rem;
+                padding-top: 0;
+                overflow-x: auto;
+            }
+
+            .sidebar-item {
+                padding: 0.75rem 1rem;
+                white-space: nowrap;
+                flex-shrink: 0;
+            }
+
+            .sidebar-foot {
+                display: none;
+            }
+
+            .topbar {
+                position: relative;
+                z-index: 30;
+                padding: 0.85rem 1rem;
+                margin-bottom: 1rem;
+                gap: 0.75rem;
+                overflow: visible;
+            }
+
+            .topbar-copy {
+                gap: 0.1rem;
+            }
+
+            .topbar-eyebrow {
+                font-size: 0.7rem;
+            }
+
+            .topbar-title {
+                font-size: 1.1rem;
+            }
+
+            .profile-menu summary {
+                padding: 0.5rem;
+                gap: 0.5rem;
+            }
+
+            .profile-avatar {
+                width: 2.2rem;
+                height: 2.2rem;
+                font-size: 0.9rem;
             }
 
             .profile-meta {
                 display: none;
             }
 
-            .app-sidebar {
-                padding: 1rem;
+            .profile-dropdown {
+                min-width: 200px;
+                right: -10px;
+                z-index: 60;
             }
 
-            .sidebar-nav {
-                grid-template-columns: 1fr;
+            .page-content {
+                gap: 1rem;
             }
 
             .hero-card,
             .card {
-                padding: 1.2rem;
+                padding: 1rem;
+            }
+
+            .hero-title {
+                font-size: 1.5rem;
+            }
+
+            .hero-copy {
+                font-size: 0.95rem;
+            }
+
+            .btn {
+                min-height: 44px;
+                padding: 0.7rem 1rem;
+                font-size: 0.95rem;
+            }
+
+            .grid,
+            .stat-grid {
+                grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            }
+
+            .metric-grid {
+                grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+            }
+
+            .info-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .form-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .widget,
+            .metric-card,
+            .stat-card,
+            .detail-card {
+                padding: 0.9rem;
+            }
+
+            .widget-title,
+            .metric-label,
+            .detail-label {
+                font-size: 0.7rem;
+            }
+
+            .widget-value,
+            .metric-value {
+                font-size: clamp(1.4rem, 2vw, 2rem);
+            }
+
+            .list-card,
+            .record-card,
+            .session-card,
+            .appointment-card {
+                flex-direction: column;
+                padding: 1rem;
+                gap: 0.75rem;
+            }
+
+            .item-title {
+                font-size: 0.95rem;
+            }
+
+            .item-meta {
+                gap: 0.4rem;
+                margin-top: 0.5rem;
+            }
+
+            .pill,
+            .badge,
+            .status-badge,
+            .status-pill {
+                min-height: 28px;
+                padding: 0.3rem 0.7rem;
+                font-size: 0.7rem;
+            }
+
+            .field-control,
+            .form-field {
+                min-height: 44px;
+                padding: 0.8rem;
+                font-size: 1rem;
+            }
+
+            textarea.field-control,
+            textarea.form-field {
+                min-height: 120px;
+            }
+
+            .field-label,
+            .form-label {
+                font-size: 0.9rem;
+            }
+
+            .banner,
+            .alert {
+                padding: 0.85rem;
+                font-size: 0.9rem;
+            }
+
+            .hero-row,
+            .section-head,
+            .split-head,
+            .action-row,
+            .surface-header {
+                flex-direction: column;
+                gap: 0.75rem;
+            }
+
+            .workspace-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .thread-link {
+                gap: 0.5rem;
+                padding: 0.85rem;
+            }
+
+            .thread-link-copy {
+                gap: 0.15rem;
+            }
+
+            .detail-grid-compact {
+                grid-template-columns: 1fr;
+                gap: 0.7rem;
+            }
+
+            .message-stream {
+                max-height: 400px;
+            }
+
+            .message-bubble {
+                max-width: 100%;
+                padding: 0.85rem;
+                font-size: 0.95rem;
+            }
+
+            .composer-card {
+                padding: 0.85rem;
+            }
+
+            .summary-panel {
+                padding: 0.85rem;
+            }
+
+            .app-table th,
+            .app-table td {
+                padding: 0.75rem;
+                font-size: 0.85rem;
+            }
+
+            .app-table th {
+                font-size: 0.7rem;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .app-shell {
+                padding: 0.75rem;
+                gap: 0.75rem;
+            }
+
+            .topbar {
+                padding: 0.7rem;
+                margin-bottom: 0.75rem;
+            }
+
+            .topbar-title {
+                font-size: 1rem;
+            }
+
+            .sidebar-nav {
+                gap: 0.35rem;
+            }
+
+            .sidebar-item {
+                padding: 0.65rem 0.8rem;
+                font-size: 0.85rem;
+            }
+
+            .hero-title {
+                font-size: 1.3rem;
+            }
+
+            .btn {
+                width: 100%;
+                min-height: 44px;
+            }
+
+            .widget-value,
+            .metric-value {
+                font-size: clamp(1.2rem, 1.8vw, 1.8rem);
+            }
+
+            .grid,
+            .stat-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .metric-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+
+            .hero-card,
+            .card {
+                padding: 0.9rem;
+            }
+
+            .hero-card::after {
+                inset: auto -2rem -2rem auto;
+                width: 8rem;
+                height: 8rem;
+            }
+
+            .field-control,
+            .form-field {
+                font-size: 16px;
+            }
+
+            .dropdown-link,
+            .dropdown-button {
+                padding: 0.75rem 0.8rem;
+                font-size: 0.9rem;
+            }
+
+            .message-stream {
+                max-height: 300px;
+            }
+
+            .list-card,
+            .record-card,
+            .session-card,
+            .appointment-card {
+                padding: 0.85rem;
+            }
+
+            .thread-link {
+                padding: 0.75rem;
             }
         }
     </style>
+    @stack('styles')
     @yield('styles')
+    <style>
+        .page-content > .card,
+        .page-content .card {
+            border: 1px solid rgba(23, 49, 61, 0.08);
+            border-radius: 1.5rem;
+            background: linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(248, 250, 252, 0.9));
+            box-shadow: 0 18px 36px rgba(23, 49, 61, 0.08);
+        }
+
+        .page-content .surface-header {
+            padding-bottom: 0.9rem;
+            border-bottom: 1px solid rgba(23, 49, 61, 0.08);
+        }
+
+        .page-content :is(.table-shell, .table-wrap, .table-responsive, .mini-table-wrap) {
+            overflow-x: auto;
+            border: 1px solid rgba(23, 49, 61, 0.08);
+            border-radius: 1rem;
+            background: rgba(255, 255, 255, 0.92);
+        }
+
+        .page-content table {
+            border-collapse: collapse;
+        }
+
+        .page-content table thead th {
+            background: rgba(148, 163, 184, 0.08) !important;
+            color: #475569 !important;
+            font-size: 0.78rem;
+            font-weight: 800;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+        }
+
+        .page-content table th,
+        .page-content table td {
+            border-bottom: 1px solid rgba(23, 49, 61, 0.08);
+            vertical-align: middle;
+        }
+
+        .page-content table tbody tr {
+            transition: background-color 0.16s ease;
+        }
+
+        .page-content table tbody tr:hover {
+            background-color: rgba(59, 130, 246, 0.035);
+        }
+
+        .page-content :is(.action-btn, .queue-filter-btn, .filter-btn) {
+            border-radius: 0.8rem;
+            font-weight: 700;
+            transition: transform 0.18s ease, box-shadow 0.18s ease;
+        }
+
+        .page-content :is(.action-btn, .queue-filter-btn, .filter-btn):hover {
+            transform: translateY(-1px);
+        }
+
+        @media (max-width: 640px) {
+            .page-content .surface-header {
+                gap: 0.75rem;
+            }
+
+            .page-content table th,
+            .page-content table td {
+                padding: 0.8rem;
+            }
+        }
+    </style>
 </head>
 <body>
     @php
@@ -907,8 +1492,7 @@
         @auth
             <aside class="app-sidebar">
                 <div class="sidebar-brand">
-                    <strong>VetCare Clinic</strong>
-                    <span>Clinical workspace for appointments, records, and prescriptions.</span>
+                    <img src="{{ asset('images/Test.jpg') }}" alt="DVCS logo" class="brand-mark">
                 </div>
 
                 <nav class="sidebar-nav">
@@ -925,7 +1509,7 @@
             <header class="topbar">
                 <div class="topbar-copy">
                     <span class="topbar-eyebrow">Care Operations</span>
-                    <strong class="topbar-title">@yield('title', 'VetCare Clinic')</strong>
+                    <strong class="topbar-title">@yield('title', 'Digos Veterinary Clinic & Supply')</strong>
                 </div>
 
                 @auth
@@ -960,131 +1544,191 @@
     <script>
         function openPetCareAI(event) {
             event.preventDefault();
-            
-            // Create modal overlay
-            const overlay = document.createElement('div');
-            overlay.style.cssText = `
-                position: fixed;
-                inset: 0;
-                background: rgba(0, 0, 0, 0.5);
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                z-index: 9999;
-            `;
-            
-            // Create modal container
-            const modal = document.createElement('div');
-            modal.style.cssText = `
-                background: white;
-                border-radius: 12px;
-                width: 90%;
-                max-width: 600px;
-                max-height: 80vh;
-                display: flex;
-                flex-direction: column;
-                box-shadow: 0 20px 55px rgba(23, 49, 61, 0.3);
-            `;
-            
-            // Create header
-            const header = document.createElement('div');
-            header.style.cssText = `
-                padding: 1.5rem;
-                border-bottom: 1px solid #e5e7eb;
-                display: flex;
-                justify-content: space-between;
-                align-items: center;
-            `;
-            header.innerHTML = `
-                <h2 style="margin: 0; font-size: 1.25rem; color: #17313d;">Ask Pet Care AI</h2>
-                <button onclick="this.closest('[data-modal]').remove()" style="background: none; border: none; font-size: 1.5rem; cursor: pointer; color: #6b7280;">&times;</button>
-            `;
-            
-            // Create chat container
-            const chatContainer = document.createElement('div');
-            chatContainer.style.cssText = `
-                flex: 1;
-                overflow-y: auto;
-                padding: 1.5rem;
-                background: #f9fafb;
-                display: flex;
-                flex-direction: column;
-                gap: 1rem;
-            `;
-            chatContainer.innerHTML = `
-                <div style="padding: 1rem; background: #e0f7ff; border-radius: 8px; border-left: 4px solid #0f8b8d;">
-                    <p style="margin: 0; color: #0d6475; font-weight: 500;">Welcome to Pet Care AI Assistant</p>
-                    <p style="margin: 0.5rem 0 0 0; color: #0d6475; font-size: 0.9rem;">Ask me anything about pet health, medications, appointments, or general care tips!</p>
-                </div>
-                <div style="padding: 1rem; background: white; border-radius: 8px;">
-                    <p style="margin: 0; color: #6b7280; font-size: 0.9rem;">I'm here to help with:</p>
-                    <ul style="margin: 0.5rem 0 0 0; padding-left: 1.5rem; color: #6b7280; font-size: 0.9rem;">
-                        <li>Pet health questions</li>
-                        <li>Medication information</li>
-                        <li>Appointment guidance</li>
-                        <li>General pet care advice</li>
-                    </ul>
-                </div>
-            `;
-            
-            // Create input area
-            const inputArea = document.createElement('div');
-            inputArea.style.cssText = `
-                padding: 1rem;
-                border-top: 1px solid #e5e7eb;
-                display: flex;
-                gap: 0.5rem;
-            `;
-            inputArea.innerHTML = `
-                <input type="text" placeholder="Type your question..." style="
-                    flex: 1;
-                    padding: 0.75rem;
-                    border: 1px solid #d1d5db;
-                    border-radius: 8px;
-                    font-family: inherit;
-                    font-size: 0.95rem;
-                " id="aiInputField">
-                <button style="
-                    padding: 0.75rem 1rem;
-                    background: linear-gradient(135deg, #0f8b8d, #0d6475);
-                    color: white;
-                    border: none;
-                    border-radius: 8px;
-                    cursor: pointer;
-                    font-weight: 500;
-                    transition: opacity 0.2s;
-                " onmouseover="this.style.opacity='0.9'" onmouseout="this.style.opacity='1'">
-                    Send
-                </button>
-            `;
-            
-            // Assemble modal
-            modal.appendChild(header);
-            modal.appendChild(chatContainer);
-            modal.appendChild(inputArea);
-            
-            overlay.appendChild(modal);
-            overlay.setAttribute('data-modal', 'ai-chat');
-            document.body.appendChild(overlay);
-            
-            // Focus input
-            setTimeout(() => document.getElementById('aiInputField')?.focus(), 100);
-            
-            // Close on overlay click
-            overlay.addEventListener('click', (e) => {
-                if (e.target === overlay) overlay.remove();
-            });
-            
-            // Close on ESC key
-            const handleEsc = (e) => {
-                if (e.key === 'Escape') {
-                    overlay.remove();
-                    document.removeEventListener('keydown', handleEsc);
-                }
-            };
-            document.addEventListener('keydown', handleEsc);
+            window.location.assign(@json(route('pet-owner.symptom-checker')));
         }
     </script>
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            document.querySelectorAll('[data-super-admin-list]').forEach((root) => {
+                const searchInput = root.querySelector('[data-super-admin-search]');
+                const filterSelects = Array.from(root.querySelectorAll('[data-super-admin-filter]'));
+                const sortButtons = Array.from(root.querySelectorAll('[data-super-admin-sort]'));
+                const pageSizeSelect = root.querySelector('[data-super-admin-page-size]');
+                const items = Array.from(root.querySelectorAll('[data-super-admin-item]'));
+                const countLabel = root.querySelector('[data-super-admin-count]');
+                const pageInfo = root.querySelector('[data-super-admin-page-info]');
+                const prevButton = root.querySelector('[data-super-admin-prev]');
+                const nextButton = root.querySelector('[data-super-admin-next]');
+                const resetButton = root.querySelector('[data-super-admin-reset]');
+
+                if (items.length === 0) {
+                    return;
+                }
+
+                let currentPage = 1;
+                let currentSortKey = root.dataset.defaultSort || '';
+                let currentSortDirection = root.dataset.defaultDirection || 'asc';
+
+                const getValue = (item, key) => (item.dataset[key] || '').trim().toLowerCase();
+
+                const applyFilters = (rows) => {
+                    let filtered = [...rows];
+
+                    if (searchInput) {
+                        const query = searchInput.value.trim().toLowerCase();
+                        if (query) {
+                            filtered = filtered.filter((item) => (item.dataset.searchText || '').includes(query));
+                        }
+                    }
+
+                    filterSelects.forEach((select) => {
+                        const key = select.dataset.superAdminFilter;
+                        const value = select.value;
+                        if (key && value && value !== 'all') {
+                            filtered = filtered.filter((item) => (item.dataset[key] || '').toLowerCase() === value.toLowerCase());
+                        }
+                    });
+
+                    return filtered;
+                };
+
+                const applySort = (rows) => {
+                    if (!currentSortKey) {
+                        return rows;
+                    }
+
+                    return [...rows].sort((a, b) => {
+                        const left = getValue(a, currentSortKey);
+                        const right = getValue(b, currentSortKey);
+
+                        const leftNumber = Number(left);
+                        const rightNumber = Number(right);
+                        const isNumeric = !Number.isNaN(leftNumber) && !Number.isNaN(rightNumber);
+                        const comparison = isNumeric
+                            ? leftNumber - rightNumber
+                            : left.localeCompare(right);
+
+                        return currentSortDirection === 'desc' ? -comparison : comparison;
+                    });
+                };
+
+                const render = () => {
+                    const filtered = applySort(applyFilters(items));
+                    const pageSize = parseInt(pageSizeSelect?.value || root.dataset.pageSize || '8', 10);
+                    const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+                    currentPage = Math.min(currentPage, totalPages);
+                    const start = (currentPage - 1) * pageSize;
+                    const end = start + pageSize;
+
+                    items.forEach((item) => {
+                        item.style.display = 'none';
+                    });
+
+                    filtered.slice(start, end).forEach((item) => {
+                        item.style.display = 'block';
+                    });
+
+                    if (countLabel) {
+                        countLabel.textContent = filtered.length > 0
+                            ? `Showing ${Math.min(end, filtered.length)} of ${filtered.length} records`
+                            : 'No records found';
+                    }
+
+                    if (pageInfo) {
+                        pageInfo.textContent = `Page ${currentPage} of ${totalPages}`;
+                    }
+
+                    if (prevButton) {
+                        prevButton.disabled = currentPage === 1;
+                    }
+
+                    if (nextButton) {
+                        nextButton.disabled = currentPage >= totalPages;
+                    }
+                };
+
+                searchInput?.addEventListener('input', () => {
+                    currentPage = 1;
+                    render();
+                });
+
+                filterSelects.forEach((select) => {
+                    select.addEventListener('change', () => {
+                        currentPage = 1;
+                        render();
+                    });
+                });
+
+                sortButtons.forEach((button) => {
+                    button.addEventListener('click', () => {
+                        const key = button.dataset.superAdminSort;
+                        if (!key) {
+                            return;
+                        }
+
+                        if (currentSortKey === key) {
+                            currentSortDirection = currentSortDirection === 'asc' ? 'desc' : 'asc';
+                        } else {
+                            currentSortKey = key;
+                            currentSortDirection = 'asc';
+                        }
+
+                        sortButtons.forEach((candidate) => {
+                            candidate.classList.toggle('active', candidate === button);
+                        });
+
+                        currentPage = 1;
+                        render();
+                    });
+                });
+
+                pageSizeSelect?.addEventListener('change', () => {
+                    currentPage = 1;
+                    render();
+                });
+
+                resetButton?.addEventListener('click', () => {
+                    if (searchInput) {
+                        searchInput.value = '';
+                    }
+                    filterSelects.forEach((select) => {
+                        select.value = 'all';
+                    });
+                    currentSortKey = root.dataset.defaultSort || '';
+                    currentSortDirection = root.dataset.defaultDirection || 'asc';
+                    sortButtons.forEach((button) => {
+                        button.classList.toggle('active', button.dataset.superAdminSort === currentSortKey);
+                    });
+                    currentPage = 1;
+                    render();
+                });
+
+                if (prevButton) {
+                    prevButton.addEventListener('click', () => {
+                        if (currentPage > 1) {
+                            currentPage -= 1;
+                            render();
+                        }
+                    });
+                }
+
+                if (nextButton) {
+                    nextButton.addEventListener('click', () => {
+                        currentPage += 1;
+                        render();
+                    });
+                }
+
+                sortButtons.forEach((button) => {
+                    button.classList.toggle('active', button.dataset.superAdminSort === currentSortKey);
+                });
+
+                render();
+            });
+        });
+    </script>
+
+    @stack('scripts')
     @yield('scripts')
 </body>
 </html>

@@ -25,7 +25,7 @@
                     </div>
                     <div>
                         <div style="font-size: 0.875rem; color: #6b7280; font-weight: 500;">Age</div>
-                        <div>{{ $appointment->pet->age }} years</div>
+                        <div>{{ $appointment->pet->age_display ?? 'N/A' }}</div>
                     </div>
                 </div>
                 <div>
@@ -49,16 +49,22 @@
                 @csrf
 
                 <div style="margin-bottom: 1.5rem;">
-                    <label for="appointment_date" style="display: block; margin-bottom: 0.5rem; font-weight: 500;">Appointment Date & Time *</label>
-                    <input 
-                        type="datetime-local" 
-                        id="appointment_date" 
-                        name="appointment_date" 
-                        style="width: 100%; padding: 0.75rem; border: 1px solid #d1d5db; border-radius: 0.375rem;"
-                        value="{{ $appointment->appointment_date->format('Y-m-d\TH:i') }}"
-                        required
-                    >
+                    <label style="display: block; margin-bottom: 0.5rem; font-weight: 500;">Appointment Date & Time *</label>
+                    @include('components.appointment-calendar', [
+                        'calendarId' => 'staff-confirm-calendar',
+                        'viewer' => 'staff',
+                        'mode' => 'reschedule',
+                        'bookings' => $calendarBookings,
+                        'slots' => $calendarSlots,
+                        'ignoreAppointmentId' => $appointment->appointment_id,
+                        'selectedDate' => $appointment->appointment_date->format('Y-m-d'),
+                        'selectedTime' => $appointment->appointment_time->format('H:i'),
+                        'reason' => $appointment->reason_for_visit,
+                    ])
                     @error('appointment_date')
+                        <p style="color: var(--color-emergency); font-size: 0.875rem; margin-top: 0.25rem;">{{ $message }}</p>
+                    @enderror
+                    @error('appointment_time')
                         <p style="color: var(--color-emergency); font-size: 0.875rem; margin-top: 0.25rem;">{{ $message }}</p>
                     @enderror
                 </div>
@@ -72,7 +78,10 @@
                     >
                         <option value="">-- Select Vet --</option>
                         @foreach($vets as $vet)
-                            <option value="{{ $vet->id }}" {{ $appointment->vet_id == $vet->id ? 'selected' : '' }}>
+                            @php
+                                $currentVetId = $appointment->consultation ? $appointment->consultation->veterinarian_id : null;
+                            @endphp
+                            <option value="{{ $vet->id }}" {{ $currentVetId == $vet->id ? 'selected' : '' }}>
                                 Dr. {{ $vet->name }}
                             </option>
                         @endforeach

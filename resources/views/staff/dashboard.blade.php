@@ -5,250 +5,360 @@
 @endsection
 
 @section('content')
-    <div class="card">
-        <h1>Welcome, {{ auth()->user()->name }}!</h1>
-        <p>Here's your daily clinic overview.</p>
-    </div>
+    <style>
+        .dashboard-shell {
+            display: grid;
+            gap: 1.35rem;
+        }
 
-    <div class="grid">
-        <div class="widget">
-            <div class="widget-title">Today's Appointments</div>
-            <div class="widget-value">{{ $todayAppointments }}</div>
-            <p style="color: #6b7280; margin-top: 0.5rem;">Scheduled for today</p>
+        .dashboard-metrics {
+            gap: 1rem;
+        }
+
+        .dashboard-metrics .widget {
+            border: 1px solid rgba(23, 49, 61, 0.08);
+            background: linear-gradient(180deg, rgba(255,255,255,0.92), rgba(248,250,252,0.88));
+            box-shadow: 0 18px 36px rgba(23, 49, 61, 0.08);
+        }
+
+        .dashboard-panel {
+            border: 1px solid rgba(23, 49, 61, 0.08);
+            border-radius: 1.5rem;
+            background: rgba(255, 255, 255, 0.9);
+            box-shadow: 0 18px 36px rgba(23, 49, 61, 0.08);
+            overflow: hidden;
+        }
+
+        .dashboard-panel--warning {
+            border-color: rgba(245, 158, 11, 0.28);
+            background: linear-gradient(180deg, rgba(255,251,235,0.96), rgba(255,255,255,0.92));
+        }
+
+        .dashboard-panel--info {
+            border-color: rgba(59, 130, 246, 0.25);
+            background: linear-gradient(180deg, rgba(248,251,255,0.96), rgba(255,255,255,0.92));
+        }
+
+        .panel-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 1rem;
+            padding: 1.1rem 1.25rem 0.9rem;
+            border-bottom: 1px solid rgba(23, 49, 61, 0.08);
+            background: rgba(255,255,255,0.2);
+        }
+
+        .panel-header h3 {
+            margin: 0;
+            font-size: 1.08rem;
+            letter-spacing: -0.02em;
+        }
+
+        .count-pill {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 30px;
+            padding: 0.35rem 0.75rem;
+            border-radius: 999px;
+            font-size: 0.78rem;
+            font-weight: 700;
+            letter-spacing: 0.02em;
+        }
+
+        .count-pill.warning {
+            background: rgba(245, 158, 11, 0.14);
+            color: #b45309;
+        }
+
+        .count-pill.info {
+            background: rgba(59, 130, 246, 0.12);
+            color: #1d4ed8;
+        }
+
+        .panel-controls {
+            display: flex;
+            gap: 0.5rem;
+            flex-wrap: wrap;
+            padding: 1rem 1.25rem 0.75rem;
+            background: rgba(255,255,255,0.2);
+        }
+
+        .filter-btn {
+            padding: 0.6rem 1rem;
+            border: none;
+            border-radius: 0.75rem;
+            cursor: pointer;
+            font-weight: 700;
+            font-size: 0.82rem;
+            color: #fff;
+            box-shadow: 0 10px 18px rgba(15, 23, 42, 0.12);
+            transition: transform 0.18s ease, opacity 0.18s ease;
+        }
+
+        .filter-btn:hover {
+            transform: translateY(-1px);
+        }
+
+        .table-shell {
+            overflow-x: auto;
+            overflow-y: auto;
+            max-height: 460px;
+        }
+
+        .dashboard-table {
+            width: 100%;
+            border-collapse: collapse;
+            min-width: 760px;
+        }
+
+        .dashboard-table th,
+        .dashboard-table td {
+            padding: 1rem 1.25rem;
+            text-align: left;
+            border-bottom: 1px solid rgba(23, 49, 61, 0.08);
+            vertical-align: middle;
+        }
+
+        .dashboard-table thead th {
+            background: rgba(148, 163, 184, 0.06);
+            color: #475569;
+            font-size: 0.78rem;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            font-weight: 800;
+        }
+
+        .dashboard-table tbody tr:hover {
+            background: rgba(59, 130, 246, 0.025);
+        }
+
+        .action-btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 36px;
+            padding: 0.6rem 0.9rem;
+            border-radius: 0.8rem;
+            background: linear-gradient(135deg, #f59e0b, #d97706);
+            color: #fff;
+            text-decoration: none;
+            font-weight: 700;
+            font-size: 0.78rem;
+            box-shadow: 0 12px 20px rgba(217, 119, 6, 0.22);
+        }
+
+        .status-badge {
+            display: inline-flex;
+            align-items: center;
+            padding: 0.38rem 0.7rem;
+            border-radius: 999px;
+            font-size: 0.75rem;
+            font-weight: 700;
+            letter-spacing: 0.03em;
+        }
+
+        .status-badge.warning {
+            background: rgba(245, 158, 11, 0.15);
+            color: #92400e;
+        }
+
+        @media (max-width: 768px) {
+            .panel-header {
+                align-items: flex-start;
+                flex-direction: column;
+            }
+
+            .panel-controls {
+                padding-top: 0.75rem;
+            }
+
+            .filter-btn {
+                flex: 1 1 calc(50% - 0.5rem);
+                min-width: 0;
+            }
+        }
+    </style>
+
+    <div class="dashboard-shell">
+        <div class="grid dashboard-metrics">
+            <div class="widget">
+                <div class="widget-title">Today's Approved Appointments</div>
+                <div class="widget-value">{{ $todayAppointments }}</div>
+                <p style="color: #6b7280; margin-top: 0.5rem;">Approved and scheduled for today</p>
+            </div>
+
+            <div class="widget">
+                <div class="widget-title">Pending Confirmations</div>
+                <div class="widget-value" style="color: var(--color-visit);">{{ $pending }}</div>
+                <p style="color: #6b7280; margin-top: 0.5rem;">Awaiting action</p>
+            </div>
+
+            <div class="widget">
+                <div class="widget-title">Total Appointments</div>
+                <div class="widget-value">{{ $allAppointments }}</div>
+                <p style="color: #6b7280; margin-top: 0.5rem;">In the system</p>
+            </div>
         </div>
 
-        <div class="widget">
-            <div class="widget-title">Pending Confirmations</div>
-            <div class="widget-value" style="color: var(--color-visit);">{{ $pending }}</div>
-            <p style="color: #6b7280; margin-top: 0.5rem;">Awaiting action</p>
+        <div class="dashboard-panel dashboard-panel--warning">
+            <div class="panel-header">
+                <h3>Pending Confirmations</h3>
+                <span class="count-pill warning">{{ $pendingRequests->count() }} pending</span>
+            </div>
+
+            @if($pendingRequests->count() > 0)
+                <div class="panel-controls">
+                    <button onclick="filterPendingAppointments('all')" class="filter-btn" data-filter="all" style="background: #d97706;">All</button>
+                    <button onclick="filterPendingAppointments('regular')" class="filter-btn" data-filter="regular" style="background: #10b981;">Regular Check-up</button>
+                    <button onclick="filterPendingAppointments('vaccination')" class="filter-btn" data-filter="vaccination" style="background: #3b82f6;">Vaccination</button>
+                    <button onclick="filterPendingAppointments('emergency')" class="filter-btn" data-filter="emergency" style="background: #dc2626;">Emergency</button>
+                </div>
+
+                <div class="table-shell">
+                    <table class="dashboard-table">
+                        <thead>
+                            <tr>
+                                <th>Pet Name</th>
+                                <th>Species</th>
+                                <th>Owner</th>
+                                <th>Phone</th>
+                                <th>Reason</th>
+                                <th>Requested Date & Time</th>
+                                <th>Status</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="pendingAppointmentsBody">
+                            @forelse($pendingRequests as $appointment)
+                                @php
+                                    $reason = $appointment->reason_for_visit ?? $appointment->reason ?? 'Regular Check-up';
+                                    $reasonLower = strtolower($reason);
+                                    $appointmentType = 'regular';
+
+                                    if (strpos($reasonLower, 'emergency') !== false) {
+                                        $appointmentType = 'emergency';
+                                    } elseif (strpos($reasonLower, 'vaccination') !== false) {
+                                        $appointmentType = 'vaccination';
+                                    }
+                                @endphp
+                                <tr class="pending-appt-row" data-type="{{ $appointmentType }}" style="border-bottom: 1px solid #fde68a; background-color: {{ $appointmentType === 'emergency' ? '#fef2f2' : '#fffbeb' }}; {{ $appointmentType === 'emergency' ? 'border-left: 4px solid #dc2626;' : '' }}">
+                                    <td style="padding: 1.25rem; color: #1f2937; font-weight: 500;">{{ $appointment->pet->name }}</td>
+                                    <td style="padding: 1.25rem; color: #4b5563;">{{ $appointment->pet->species }}</td>
+                                    <td style="padding: 1.25rem; color: #4b5563;">{{ $appointment->pet->owner->name }}</td>
+                                    <td style="padding: 1.25rem; color: #4b5563;">{{ $appointment->pet->owner->phone ?? 'N/A' }}</td>
+                                    <td style="padding: 1.25rem; color: #4b5563; font-weight: {{ $appointmentType === 'emergency' ? '600' : '500' }};">{{ $reason }}</td>
+                                    <td style="padding: 1.25rem; color: #4b5563; white-space: nowrap;">{{ $appointment->appointment_date ? $appointment->appointment_date->format('M d, Y • h:i A') : 'TBD' }}</td>
+                                    <td style="padding: 1.25rem; text-align: center;">
+                                        <span class="status-badge warning">{{ $appointment->status }}</span>
+                                    </td>
+                                    <td style="padding: 1.25rem; text-align: center;">
+                                        <a href="{{ route('staff.appointments.confirm', $appointment->id) }}" class="action-btn">Confirm Now</a>
+                                    </td>
+                                </tr>
+                            @empty
+                                <tr>
+                                    <td colspan="8" style="padding: 1.5rem; text-align: center; color: #6b7280;">No pending appointments awaiting confirmation</td>
+                                </tr>
+                            @endforelse
+                        </tbody>
+                    </table>
+                </div>
+            @else
+                <div style="padding: 1.5rem; color: #6b7280; text-align: center;">No pending appointments awaiting confirmation.</div>
+            @endif
         </div>
 
-        <div class="widget">
-            <div class="widget-title">Emergency Alerts</div>
-            <div class="widget-value" style="color: var(--color-emergency);">{{ $emergencies }}</div>
-            <p style="color: #6b7280; margin-top: 0.5rem;">High priority</p>
-        </div>
-
-        <div class="widget">
-            <div class="widget-title">Total Appointments</div>
-            <div class="widget-value">{{ $allAppointments }}</div>
-            <p style="color: #6b7280; margin-top: 0.5rem;">In the system</p>
-        </div>
-    </div>
-
-    <div class="card">
-        <h2>Quick Tasks</h2>
         
-        <!-- Emergency Appointments Section -->
-        @if($emergencies > 0)
-            <div id="section-emergency" style="margin-bottom: 2rem; border: 1px solid #e5e7eb; padding: 1rem; border-radius: 0.375rem;">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
-                    <h3 style="color: #ef4444; margin: 0;">Emergency Appointments ({{ $emergencyAppointments->count() }})</h3>
-                    <div style="display: flex; gap: 0.5rem;">
-                        <button onclick="toggleSeeAll('emergency')" id="see-all-emergency" class="btn-action" style="padding: 0.5rem 1rem; background: #ef4444; color: white; border: none; border-radius: 0.375rem; cursor: pointer; font-size: 0.875rem;">See All</button>
-                    </div>
-                </div>
-                <div id="content-emergency" style="display: grid; gap: 1rem;">
-                    @forelse($emergencyAppointments as $appointment)
-                        <div data-section="emergency" style="padding: 1rem; background: #fee2e2; border-radius: 0.375rem; border-left: 4px solid #ef4444;">
-                            <div style="display: flex; justify-content: space-between; align-items: start;">
-                                <div style="flex: 1;">
-                                    <strong>{{ $appointment->pet->name }} ({{ $appointment->pet->species }})</strong>
-                                    <p style="margin: 0.5rem 0 0 0; color: #6b7280;">Owner: {{ $appointment->pet->owner->name }}</p>
-                                    <p style="margin: 0.25rem 0 0 0; font-size: 0.875rem;">Phone: {{ $appointment->pet->owner->phone ?? 'N/A' }}</p>
-                                    <p style="margin: 0.5rem 0 0 0; font-size: 0.875rem;"><strong>Reason:</strong> {{ $appointment->reason }}</p>
-                                    <p style="margin: 0.25rem 0 0 0; font-size: 0.875rem;">{{ $appointment->appointment_date ? $appointment->appointment_date->format('M d, Y • h:i A') : 'TBD' }}</p>
-                                </div>
-                                <div style="text-align: right;">
-                                    <a href="{{ route('staff.appointments.confirm', $appointment->id) }}" class="btn btn-primary" style="padding: 0.5rem 0.75rem; font-size: 0.75rem; text-decoration: none; display: inline-block;">Review & Confirm</a>
-                                </div>
-                            </div>
-                        </div>
-                    @empty
-                        <p style="color: #6b7280;">No emergency appointments</p>
-                    @endforelse
-                </div>
-            </div>
-        @endif
 
-        <!-- Regular Check-ups Section -->
-        @if($regularAppointments->count() > 0)
-            <div id="section-regular" style="margin-bottom: 2rem; border: 1px solid #e5e7eb; padding: 1rem; border-radius: 0.375rem;">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
-                    <h3 style="color: #10b981; margin: 0;">Regular Check-ups ({{ $regularAppointments->count() }})</h3>
-                    <div style="display: flex; gap: 0.5rem;">
-                        <button onclick="toggleSeeAll('regular')" id="see-all-regular" class="btn-action" style="padding: 0.5rem 1rem; background: #10b981; color: white; border: none; border-radius: 0.375rem; cursor: pointer; font-size: 0.875rem;">See All</button>
-                    </div>
-                </div>
-                <div id="content-regular" style="display: grid; gap: 1rem;">
-                    @forelse($regularAppointments as $appointment)
-                        <div data-section="regular" style="padding: 1rem; background: #dcfce7; border-radius: 0.375rem; border-left: 4px solid #10b981;">
-                            <div style="display: flex; justify-content: space-between; align-items: start;">
-                                <div style="flex: 1;">
-                                    <strong>{{ $appointment->pet->name }} ({{ $appointment->pet->species }})</strong>
-                                    <p style="margin: 0.5rem 0 0 0; color: #6b7280;">Owner: {{ $appointment->pet->owner->name }}</p>
-                                    <p style="margin: 0.25rem 0 0 0; font-size: 0.875rem;">Phone: {{ $appointment->pet->owner->phone ?? 'N/A' }}</p>
-                                    <p style="margin: 0.5rem 0 0 0; font-size: 0.875rem;"><strong>Reason:</strong> {{ $appointment->reason }}</p>
-                                    <p style="margin: 0.25rem 0 0 0; font-size: 0.875rem;">{{ $appointment->appointment_date ? $appointment->appointment_date->format('M d, Y • h:i A') : 'TBD' }}</p>
-                                </div>
-                                <div style="text-align: right;">
-                                    <a href="{{ route('staff.appointments.confirm', $appointment->id) }}" class="btn btn-primary" style="padding: 0.5rem 0.75rem; font-size: 0.75rem; text-decoration: none; display: inline-block;">Review & Confirm</a>
-                                </div>
-                            </div>
-                        </div>
-                    @empty
-                        <p style="color: #6b7280;">No regular appointments</p>
-                    @endforelse
-                </div>
-            </div>
-        @endif
-
-        @if($emergencies == 0 && $regularAppointments->count() == 0)
-            <div style="padding: 1rem; background: #f0fdf4; border-radius: 0.375rem; border-left: 4px solid #10b981;">
-                <strong>No Pending Appointments</strong>
-                <p style="margin: 0.5rem 0 0 0; color: #6b7280; font-size: 0.875rem;">All appointments are up to date</p>
-            </div>
-        @endif
-    </div>
-
-    <div class="card">
-        <h2>Approved Appointments</h2>
-        
-        <!-- Upcoming Approved Appointments -->
         @if($upcomingApprovedAppointments->count() > 0)
-            <div id="section-upcoming" style="margin-bottom: 2rem; border: 1px solid #e5e7eb; padding: 1rem; border-radius: 0.375rem;">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
-                    <h3 style="color: #667eea; margin: 0;">Upcoming Appointments ({{ $upcomingApprovedAppointments->count() }})</h3>
-                    <div style="display: flex; gap: 0.5rem;">
-                        <button onclick="toggleSeeAll('upcoming')" id="see-all-upcoming" class="btn-action" style="padding: 0.5rem 1rem; background: #667eea; color: white; border: none; border-radius: 0.375rem; cursor: pointer; font-size: 0.875rem;">See All</button>
-                    </div>
+            <div class="dashboard-panel dashboard-panel--info">
+                <div class="panel-header">
+                    <h3>Upcoming Approved Appointments</h3>
+                    <span class="count-pill info">{{ $upcomingApprovedAppointments->count() }} confirmed</span>
                 </div>
-                <div id="content-upcoming" style="display: grid; gap: 1rem; margin-bottom: 1rem;">
-                @forelse($upcomingApprovedAppointments as $appointment)
-                        <div data-section="upcoming" style="padding: 1rem; background: #ffffff; border-radius: 0.375rem; border-left: 4px solid #667eea; border: 1px solid #e5e7eb;">
-                        <div style="display: flex; justify-content: space-between; align-items: start;">
-                            <div style="flex: 1;">
-                                <strong style="font-size: 1rem;">{{ $appointment->pet->name }} ({{ $appointment->pet->species }})</strong>
-                                <p style="margin: 0.5rem 0 0 0; color: #6b7280;">Owner: {{ $appointment->pet->owner->name }}</p>
-                                <p style="margin: 0.25rem 0 0 0; font-size: 0.875rem;">Phone: {{ $appointment->pet->owner->phone ?? 'N/A' }}</p>
-                                <p style="margin: 0.5rem 0 0 0; font-size: 0.875rem;"><strong>Reason:</strong> {{ $appointment->reason }}</p>
-                            </div>
-                            <div style="text-align: right;">
-                                <div style="padding: 0.75rem; background: #dbeafe; border-radius: 0.375rem; border-left: 3px solid #667eea;">
-                                    <p style="margin: 0; font-size: 0.875rem; color: #667eea;"><strong>Date & Time</strong></p>
-                                    <p style="margin: 0.5rem 0 0 0; font-size: 1rem; font-weight: bold; color: #1f2937;">{{ $appointment->appointment_date ? $appointment->appointment_date->format('M d, Y') : 'TBD' }}</p>
-                                    <p style="margin: 0.25rem 0 0 0; font-size: 1rem; font-weight: bold; color: #667eea;">{{ $appointment->appointment_date ? $appointment->appointment_date->format('h:i A') : '' }}</p>
-                                </div>
-                                @if($appointment->veterinarian)
-                                    <p style="margin: 1rem 0 0 0; font-size: 0.875rem; color: #6b7280;">Vet: <strong>{{ $appointment->veterinarian->name }}</strong></p>
-                                @endif
-                            </div>
-                        </div>
-                    </div>
-                @empty
-                    <p style="color: #6b7280;">No upcoming appointments</p>
-                @endforelse
-                </div>
-            </div>
-        @endif
-        
-        <!-- Missed Approved Appointments -->
-        @if($missedApprovedAppointments->count() > 0)
-            <div id="section-missed" style="margin-bottom: 2rem; border: 1px solid #e5e7eb; padding: 1rem; border-radius: 0.375rem;">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
-                    <h3 style="color: #ef4444; margin: 0;">Missed Appointments ({{ $missedApprovedAppointments->count() }})</h3>
-                    <div style="display: flex; gap: 0.5rem;">
-                        <button onclick="toggleSeeAll('missed')" id="see-all-missed" class="btn-action" style="padding: 0.5rem 1rem; background: #ef4444; color: white; border: none; border-radius: 0.375rem; cursor: pointer; font-size: 0.875rem;">See All</button>
-                    </div>
-                </div>
-                <div id="content-missed" style="display: grid; gap: 1rem;">
-                @forelse($missedApprovedAppointments as $appointment)
-                        <div data-section="missed" style="padding: 1rem; background: #fef2f2; border-radius: 0.375rem; border-left: 4px solid #ef4444; border: 1px solid #fecaca; opacity: 0.8;">
-                        <div style="display: flex; justify-content: space-between; align-items: start;">
-                            <div style="flex: 1;">
-                                <strong style="font-size: 1rem; color: #991b1b;">{{ $appointment->pet->name }} ({{ $appointment->pet->species }})</strong>
-                                <p style="margin: 0.5rem 0 0 0; color: #6b7280;">Owner: {{ $appointment->pet->owner->name }}</p>
-                                <p style="margin: 0.25rem 0 0 0; font-size: 0.875rem;">Phone: {{ $appointment->pet->owner->phone ?? 'N/A' }}</p>
-                                <p style="margin: 0.5rem 0 0 0; font-size: 0.875rem;"><strong>Reason:</strong> {{ $appointment->reason }}</p>
-                            </div>
-                            <div style="text-align: right;">
-                                <div style="padding: 0.75rem; background: #fee2e2; border-radius: 0.375rem; border-left: 3px solid #ef4444;">
-                                    <p style="margin: 0; font-size: 0.875rem; color: #ef4444;"><strong>Was On</strong></p>
-                                    <p style="margin: 0.5rem 0 0 0; font-size: 1rem; font-weight: bold; color: #991b1b;">{{ $appointment->appointment_date ? $appointment->appointment_date->format('M d, Y') : 'TBD' }}</p>
-                                    <p style="margin: 0.25rem 0 0 0; font-size: 1rem; font-weight: bold; color: #ef4444;">{{ $appointment->appointment_date ? $appointment->appointment_date->format('h:i A') : '' }}</p>
-                                </div>
-                                @if($appointment->veterinarian)
-                                    <p style="margin: 1rem 0 0 0; font-size: 0.875rem; color: #6b7280;">Vet: <strong>{{ $appointment->veterinarian->name }}</strong></p>
-                                @endif
-                            </div>
-                        </div>
-                    </div>
-                @empty
-                    <p style="color: #6b7280;">No missed appointments</p>
-                @endforelse
+                <div class="table-shell">
+                    <table class="dashboard-table">
+                        <thead>
+                            <tr>
+                                <th>Pet Name</th>
+                                <th>Species</th>
+                                <th>Owner</th>
+                                <th>Phone</th>
+                                <th>Reason</th>
+                                <th>Date & Time</th>
+                                <th>Veterinarian</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @forelse($upcomingApprovedAppointments as $appointment)
+                                <tr>
+                                    <td style="padding: 1.25rem; color: #1f2937; font-weight: 500;">{{ $appointment->pet->name }}</td>
+                                    <td style="padding: 1.25rem; color: #4b5563;">{{ $appointment->pet->species }}</td>
+                                    <td style="padding: 1.25rem; color: #4b5563;">{{ $appointment->pet->owner->name }}</td>
+                                    <td style="padding: 1.25rem; color: #4b5563;">{{ $appointment->pet->owner->phone ?? 'N/A' }}</td>
+                                    <td style="padding: 1.25rem; color: #4b5563;">{{ $appointment->reason_for_visit ?? $appointment->reason ?? 'Regular Check-up' }}</td>
+                                    <td style="padding: 1.25rem; color: #4b5563; white-space: nowrap;">{{ $appointment->appointment_date ? $appointment->appointment_date->format('M d, Y • h:i A') : 'TBD' }}</td>
+                                    <td style="padding: 1.25rem; color: #4b5563;">
+                                        @if($appointment->consultation && $appointment->consultation->veterinarian)
+                                            Dr. {{ $appointment->consultation->veterinarian->name }}
+                                        @else
+                                            <span style="color: #9ca3af; font-style: italic;">Not assigned</span>
+                                        @endif
+                                    </td>
+                                </tr>
+                            @empty
+                                <tr>
+                                    <td colspan="7" style="padding: 1.5rem; text-align: center; color: #6b7280;">No upcoming approved appointments</td>
+                                </tr>
+                            @endforelse
+                        </tbody>
+                    </table>
                 </div>
             </div>
+        @else
+            <div class="dashboard-panel" style="padding: 1.25rem; color: #6b7280; text-align: center;">No upcoming approved appointments.</div>
         @endif
-        
-        @if($upcomingApprovedAppointments->count() == 0 && $missedApprovedAppointments->count() == 0)
-            <div style="padding: 1rem; background: #f3f4f6; border-radius: 0.375rem; border-left: 4px solid #9ca3af;">
-                <p style="color: #6b7280; margin: 0;">No scheduled appointments</p>
-            </div>
-        @endif
-    </div>
-
-    <div class="card">
-        <h2>Recent Activity</h2>
-        <div style="display: grid; gap: 0.75rem; font-size: 0.875rem;">
-            <div>Dashboard loaded with {{ $allAppointments }} total appointment(s)</div>
-            <div>{{ $pending }} appointment(s) pending confirmation</div>
-            @if($emergencies > 0)
-                <div>{{ $emergencies }} emergency appointment(s) require immediate attention</div>
-            @endif
-            <div>{{ $todayAppointments }} appointment(s) scheduled for today</div>
-            @if($recentPending->count() > 0)
-                <div>Most recent pending: {{ $recentPending->first()->pet->name ?? 'Unknown' }} - {{ $recentPending->first()->pet->owner->name ?? 'Unknown' }}</div>
-            @endif
-        </div>
     </div>
 
     <script>
-        function toggleSeeAll(sectionId) {
-            const content = document.getElementById(`content-${sectionId}`);
-            const button = document.getElementById(`see-all-${sectionId}`);
-            
-            if (!content) return;
-            
-            const items = content.querySelectorAll('[data-section="' + sectionId + '"]');
-            const hiddenItems = Array.from(items).filter(item => item.style.display === 'none');
-            
-            if (hiddenItems.length > 0) {
-                // Show all
-                hiddenItems.forEach(item => item.style.display = 'block');
-                if (button) button.textContent = 'Show Less';
-            } else {
-                // Hide extras (keep first item visible)
-                items.forEach((item, index) => {
-                    if (index > 0) {
-                        item.style.display = 'none';
-                    }
-                });
-                if (button) button.textContent = 'See All';
-            }
+        function filterPendingAppointments(filterType) {
+            const rows = document.querySelectorAll('.pending-appt-row');
+
+            rows.forEach((row) => {
+                const type = row.getAttribute('data-type');
+                const matches = filterType === 'all' || type === filterType;
+                row.style.display = matches ? '' : 'none';
+            });
+
+            document.querySelectorAll('.filter-btn').forEach((btn) => {
+                const isActive = btn.getAttribute('data-filter') === filterType;
+                btn.style.opacity = isActive ? '1' : '0.6';
+                btn.style.boxShadow = isActive ? '0 0 0 2px rgba(0,0,0,0.2)' : 'none';
+            });
         }
 
-        // Initialize: hide extra items on load
         document.addEventListener('DOMContentLoaded', function() {
-            ['emergency', 'regular', 'upcoming', 'missed'].forEach(sectionId => {
-                const content = document.getElementById(`content-${sectionId}`);
-                if (content) {
-                    const items = content.querySelectorAll('[data-section="' + sectionId + '"]');
-                    items.forEach((item, index) => {
-                        if (index > 0) {
-                            item.style.display = 'none';
-                        }
-                    });
-                }
+            const tbody = document.getElementById('pendingAppointmentsBody');
+            if (!tbody) {
+                return;
+            }
+
+            const rows = Array.from(document.querySelectorAll('.pending-appt-row'));
+            rows.sort((a, b) => {
+                const typeA = a.getAttribute('data-type');
+                const typeB = b.getAttribute('data-type');
+                if (typeA === 'emergency' && typeB !== 'emergency') return -1;
+                if (typeA !== 'emergency' && typeB === 'emergency') return 1;
+                return 0;
+            });
+
+            rows.forEach((row) => tbody.appendChild(row));
+
+            document.querySelectorAll('.filter-btn').forEach((btn) => {
+                const isActive = btn.getAttribute('data-filter') === 'all';
+                btn.style.opacity = isActive ? '1' : '0.6';
             });
         });
     </script>

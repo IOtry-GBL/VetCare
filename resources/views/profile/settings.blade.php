@@ -3,7 +3,9 @@
 @section('title', 'Profile Settings')
 
 @section('sidebar')
-    @if (auth()->user()->hasRole('vet'))
+    @if (auth()->user()->isSuperAdmin())
+        <a href="{{ route('super-admin.dashboard') }}" class="sidebar-item">Dashboard</a>
+    @elseif (auth()->user()->hasRole('vet'))
         <a href="{{ route('vet.dashboard') }}" class="sidebar-item">Dashboard</a>
     @elseif (auth()->user()->hasRole('owner'))
         <a href="{{ route('pet-owner.dashboard') }}" class="sidebar-item">Dashboard</a>
@@ -40,7 +42,6 @@
                 <h2>Account Details</h2>
                 <p class="section-copy">Save your basic profile information and optionally set a new password.</p>
             </div>
-            <span class="pill pill-neutral">{{ $user->role }}</span>
         </div>
 
         <form action="{{ route('profile.settings.update') }}" method="POST" class="stack">
@@ -73,11 +74,13 @@
                 </div>
 
                 <div class="field">
-                    <label class="field-label">Role</label>
-                    <div class="field-control" style="display: flex; align-items: center; background: rgba(23, 49, 61, 0.04);">
-                        {{ $user->role }}
-                    </div>
+                    <label class="field-label" for="address">Address</label>
+                    <textarea id="address" name="address" class="field-control" rows="3">{{ old('address', $user->address) }}</textarea>
+                    @error('address')
+                        <p class="field-error">{{ $message }}</p>
+                    @enderror
                 </div>
+
             </div>
 
             <div class="form-grid">

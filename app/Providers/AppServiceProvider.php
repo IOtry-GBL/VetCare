@@ -4,6 +4,7 @@ namespace App\Providers;
 
 use App\Models\Pet;
 use App\Policies\PetPolicy;
+use App\Services\SystemMailSettings;
 use Illuminate\Support\ServiceProvider;
 
 class AppServiceProvider extends ServiceProvider
@@ -20,7 +21,11 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        //
+        $this->app->singleton(SystemMailSettings::class, fn ($app): SystemMailSettings => new SystemMailSettings(
+            $app['config']->get('mail.default'),
+            $app['config']->get('mail.mailers.smtp'),
+            $app['config']->get('mail.from')
+        ));
     }
 
     /**
@@ -29,6 +34,7 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         $this->registerPolicies();
+        app(SystemMailSettings::class)->applySaved();
     }
 
     /**

@@ -34,7 +34,7 @@
                     </div>
                     <div>
                         <div style="font-size: 0.875rem; color: #6b7280; font-weight: 500;">Age</div>
-                        <div>{{ $pet->age }} years</div>
+                        <div>{{ $pet->age_display ?? 'N/A' }}</div>
                     </div>
                     <div>
                         <div style="font-size: 0.875rem; color: #6b7280; font-weight: 500;">Sex</div>
@@ -46,7 +46,7 @@
 
         <div style="background-color: #fef2f2; padding: 1.5rem; border-radius: 0.375rem; margin-bottom: 2rem;">
             <p style="margin: 0; color: #991b1b;">
-                <strong>Warning:</strong> Deleting {{ $pet->name }} will permanently remove all associated medical records, appointments, and prescriptions. This cannot be reversed.
+                <strong>Warning:</strong> Deleting {{ $pet->name }} will permanently remove all associated appointments and prescriptions. This cannot be reversed.
             </p>
         </div>
 

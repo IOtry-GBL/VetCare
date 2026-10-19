@@ -2,8 +2,8 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasOne;
@@ -16,6 +16,7 @@ class Appointment extends Model
     public const ACTIVE_STATUSES = ['Pending', 'Approved', 'Rescheduled'];
 
     protected $primaryKey = 'appointment_id';
+
     protected $fillable = ['pet_id', 'appointment_date', 'appointment_time', 'consultation_mode', 'reason_for_visit', 'status', 'proof_of_payment'];
 
     protected $casts = [
@@ -35,19 +36,16 @@ class Appointment extends Model
 
     public function getAppointmentDateAttribute($value): ?Carbon
     {
-        if (!$value) {
+        if (! $value) {
             return null;
         }
 
-        $date = Carbon::parse($value);
+        $date = Carbon::parse($value, 'Asia/Manila');
         $time = $this->attributes['appointment_time'] ?? null;
 
         if ($time) {
-            $parts = explode(':', $time);
-            $hour = (int) ($parts[0] ?? 0);
-            $minute = (int) ($parts[1] ?? 0);
-            $second = (int) ($parts[2] ?? 0);
-            $date->setTime($hour, $minute, $second);
+            $time = Carbon::parse($time, 'Asia/Manila');
+            $date->setTime($time->hour, $time->minute, $time->second);
         }
 
         return $date;
@@ -65,7 +63,19 @@ class Appointment extends Model
 
     public function scopeActiveEntries(Builder $query): Builder
     {
-        return $query->whereIn('status', self::ACTIVE_STATUSES);
+        $now = now('Asia/Manila');
+
+        return $query
+            ->whereIn('status', self::ACTIVE_STATUSES)
+            ->where(function (Builder $query) use ($now) {
+                $query
+                    ->whereDate('appointment_date', '>', $now->toDateString())
+                    ->orWhere(function (Builder $query) use ($now) {
+                        $query
+                            ->whereDate('appointment_date', $now->toDateString())
+                            ->whereTime('appointment_time', '>=', $now->format('H:i:s'));
+                    });
+            });
     }
 
     public static function petHasActiveEntry(int $petId, ?int $ignoreAppointmentId = null): bool

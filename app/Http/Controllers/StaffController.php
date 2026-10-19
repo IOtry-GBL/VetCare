@@ -5,13 +5,18 @@ namespace App\Http\Controllers;
 use App\Models\Appointment;
 use App\Models\Consultation;
 use App\Models\Pet;
-use App\Models\SymptomLog;
 use App\Models\User;
 use App\Models\MedicalRecord;
 use App\Models\EPrescription;
 use App\Models\AdherenceLog;
+use App\Models\AdherenceNotification;
+use App\Models\AppointmentNotification;
+use App\Models\StaffNotificationDismissal;
+use App\Services\AppointmentScheduleService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Validator;
 
 class StaffController extends Controller
 {
@@ -20,34 +25,46 @@ class StaffController extends Controller
      */
     public function dashboard()
     {
+        $clinicNow = now('Asia/Manila');
+        $clinicToday = $clinicNow->toDateString();
+
         $allAppointments = Appointment::count();
-        $todayAppointments = Appointment::whereDate('appointment_date', today())->count();
+        $todayAppointments = Appointment::whereDate('appointment_date', $clinicToday)
+            ->where('status', 'Approved')
+            ->count();
         $pending = Appointment::where('status', 'Pending')->count();
-        $emergencies = SymptomLog::where('concern_level', 'emergency')->count();
         
         // Get appointment requests awaiting confirmation
         $pendingRequests = Appointment::where('status', 'Pending')
-            ->where('appointment_date', '>=', now()->toDateString())
+            ->where('appointment_date', '>=', $clinicToday)
             ->with('pet.owner')
             ->orderBy('appointment_date', 'asc')
             ->get();
         
+        // Get upcoming pending appointments waiting for review
+        $upcomingPendingAppointments = Appointment::where('status', 'Pending')
+            ->where('appointment_date', '>=', $clinicToday)
+            ->with('pet.owner')
+            ->orderBy('appointment_date', 'asc')
+            ->get();
+
         // Get upcoming approved appointments
         $upcomingApprovedAppointments = Appointment::where('status', 'Approved')
-            ->where('appointment_date', '>=', now()->toDateString())
+            ->where('appointment_date', '>=', $clinicToday)
             ->with('pet.owner')
             ->orderBy('appointment_date', 'asc')
             ->get();
         
         // Get today's appointments
-        $todayListAppointments = Appointment::whereDate('appointment_date', today())
+        $todayListAppointments = Appointment::whereDate('appointment_date', $clinicToday)
+            ->where('status', 'Approved')
             ->with('pet.owner')
             ->orderBy('appointment_time', 'asc')
             ->get();
         
         // Get regular check-ups (appointments not related to emergencies)
-$regularAppointments = Appointment::where('status', 'Approved')
-            ->where('appointment_date', '>=', now()->toDateString())
+        $regularAppointments = Appointment::where('status', 'Approved')
+            ->where('appointment_date', '>=', $clinicToday)
             ->with('pet.owner')
             ->orderBy('appointment_date', 'asc')
             ->get();
@@ -57,7 +74,7 @@ $regularAppointments = Appointment::where('status', 'Approved')
             $query->where('status', 'Missed')
                 ->orWhere(function ($approvedQuery) {
                     $approvedQuery->where('status', 'Approved')
-                        ->where('appointment_date', '<', now()->toDateString());
+                        ->where('appointment_date', '<', now('Asia/Manila')->toDateString());
                 });
         })
             ->with('pet.owner')
@@ -66,13 +83,15 @@ $regularAppointments = Appointment::where('status', 'Approved')
 
         // Get recent pending appointments for activity summary
         $recentPending = Appointment::where('status', 'Pending')
-            ->where('appointment_date', '>=', now()->toDateString())
+            ->where('appointment_date', '>=', $clinicToday)
             ->with('pet.owner')
             ->orderBy('appointment_date', 'asc')
             ->limit(5)
             ->get();
 
-        return view('staff.dashboard', compact('allAppointments', 'todayAppointments', 'pending', 'emergencies', 'pendingRequests', 'upcomingApprovedAppointments', 'todayListAppointments', 'regularAppointments', 'missedApprovedAppointments', 'recentPending'));
+
+
+        return view('staff.dashboard', compact('allAppointments', 'todayAppointments', 'pending', 'pendingRequests', 'upcomingPendingAppointments', 'upcomingApprovedAppointments', 'todayListAppointments', 'regularAppointments', 'missedApprovedAppointments', 'recentPending'));
     }
 
     /**
@@ -106,6 +125,98 @@ $regularAppointments = Appointment::where('status', 'Approved')
     }
 
     /**
+     * Hide one notification from the signed-in staff member's feed.
+     */
+    public function deleteNotification(string $type, int $id)
+    {
+        $allowedTypes = ['new-appointment', 'cancelled-appointment', 'did-not-arrive', 'adherence'];
+
+        abort_unless(in_array($type, $allowedTypes, true), 404);
+
+        if ($type === 'adherence') {
+            AdherenceNotification::findOrFail($id);
+        } else {
+            Appointment::findOrFail($id);
+        }
+
+        StaffNotificationDismissal::firstOrCreate([
+            'user_id' => auth()->id(),
+            'notification_key' => $this->staffNotificationKey($type, $id),
+        ]);
+
+        return redirect()
+            ->route('staff.notifications')
+            ->with('success', 'Notification deleted from your feed.');
+    }
+
+    /**
+     * Clear all notifications for the current staff member
+     */
+    public function clearAllNotifications()
+    {
+        $user = auth()->user();
+        $manilaNow = now('Asia/Manila');
+        $recentWindowStartUtc = $manilaNow->copy()->subHours(24)->utc();
+        $todayStartUtc = $manilaNow->copy()->startOfDay()->utc();
+        $todayEndUtc = $manilaNow->copy()->endOfDay()->utc();
+        
+        // Get all current notifications without filtering by dismissed keys
+        $newAppointmentEntries = Appointment::where('created_at', '>=', $recentWindowStartUtc)
+            ->limit(12)
+            ->pluck('appointment_id');
+        
+        $cancelledTodayAppointments = Appointment::where('status', 'Cancelled')
+            ->whereBetween('updated_at', [$todayStartUtc, $todayEndUtc])
+            ->limit(12)
+            ->pluck('appointment_id');
+        
+        $recentDidNotArriveAppointments = Appointment::where('status', 'Missed')
+            ->where('updated_at', '>=', $recentWindowStartUtc)
+            ->limit(12)
+            ->pluck('appointment_id');
+        
+        $adherenceNotifications = AdherenceNotification::where('status', 'Confirmed')
+            ->whereNotNull('confirmed_at')
+            ->where(function ($query) use ($recentWindowStartUtc) {
+                $query->where('confirmed_at', '>=', $recentWindowStartUtc)
+                    ->orWhere('scheduled_at', '>=', $recentWindowStartUtc);
+            })
+            ->limit(12)
+            ->pluck('notification_id');
+        
+        // Create dismissals for all notification types
+        foreach ($newAppointmentEntries as $id) {
+            StaffNotificationDismissal::firstOrCreate([
+                'user_id' => $user->id,
+                'notification_key' => $this->staffNotificationKey('new-appointment', $id),
+            ]);
+        }
+        
+        foreach ($cancelledTodayAppointments as $id) {
+            StaffNotificationDismissal::firstOrCreate([
+                'user_id' => $user->id,
+                'notification_key' => $this->staffNotificationKey('cancelled-appointment', $id),
+            ]);
+        }
+        
+        foreach ($recentDidNotArriveAppointments as $id) {
+            StaffNotificationDismissal::firstOrCreate([
+                'user_id' => $user->id,
+                'notification_key' => $this->staffNotificationKey('did-not-arrive', $id),
+            ]);
+        }
+        
+        foreach ($adherenceNotifications as $id) {
+            StaffNotificationDismissal::firstOrCreate([
+                'user_id' => $user->id,
+                'notification_key' => $this->staffNotificationKey('adherence', $id),
+            ]);
+        }
+        
+        return response()->json(['message' => 'All notifications cleared successfully'], 200);
+    }
+
+    /**
      * Show pending appointment requests from pet owners
      */
     public function pendingAppointments()
@@ -120,8 +231,10 @@ $regularAppointments = Appointment::where('status', 'Approved')
     {
         $appointment = Appointment::findOrFail($id);
         $vets = User::where('role', 'Veterinarian')->get();
+        $calendarBookings = AppointmentScheduleService::calendarBookings();
+        $calendarSlots = AppointmentScheduleService::timeSlots();
 
-        return view('staff.confirm-appointment', compact('appointment', 'vets'));
+        return view('staff.confirm-appointment', compact('appointment', 'vets', 'calendarBookings', 'calendarSlots'));
     }
 
     /**
@@ -132,8 +245,10 @@ $regularAppointments = Appointment::where('status', 'Approved')
         $pets = Pet::with('owner')->get();
         $vets = User::where('role', 'Veterinarian')->get();
         $unavailablePetIds = Appointment::query()->activeEntries()->pluck('pet_id')->all();
+        $calendarBookings = AppointmentScheduleService::calendarBookings();
+        $calendarSlots = AppointmentScheduleService::timeSlots();
 
-        return view('staff.create-appointment', compact('pets', 'vets', 'unavailablePetIds'));
+        return view('staff.create-appointment', compact('pets', 'vets', 'unavailablePetIds', 'calendarBookings', 'calendarSlots'));
     }
 
     /**
@@ -141,14 +256,7 @@ $regularAppointments = Appointment::where('status', 'Approved')
      */
     public function storeAppointment(Request $request)
     {
-        $appointmentDateTime = $request->input('appointment_date');
-        if ($appointmentDateTime && str_contains($appointmentDateTime, 'T') && !$request->filled('appointment_time')) {
-            [$date, $time] = explode('T', $appointmentDateTime, 2);
-            $request->merge([
-                'appointment_date' => $date,
-                'appointment_time' => $time,
-            ]);
-        }
+        AppointmentScheduleService::normalizeDateTimeInput($request);
 
         if (!$request->filled('consultation_mode')) {
             $request->merge(['consultation_mode' => 'In-clinic']);
@@ -172,7 +280,7 @@ $regularAppointments = Appointment::where('status', 'Approved')
             $request->merge(['status' => 'Pending']);
         }
 
-        $validated = $request->validate([
+        $validator = Validator::make($request->all(), [
             'pet_id' => 'required|exists:pets,pet_id',
             'appointment_date' => 'required|date_format:Y-m-d',
             'appointment_time' => 'required|date_format:H:i',
@@ -181,6 +289,8 @@ $regularAppointments = Appointment::where('status', 'Approved')
             'status' => 'required|in:Pending,Approved,Rescheduled,Completed,Cancelled',
             'vet_id' => 'nullable|exists:users,user_id',
         ]);
+        $validator->after(fn ($validator) => AppointmentScheduleService::validateSlot($validator, $request));
+        $validated = $validator->validate();
 
         if (Appointment::petHasActiveEntry((int) $validated['pet_id'])) {
             return back()
@@ -198,6 +308,13 @@ $regularAppointments = Appointment::where('status', 'Approved')
             'reason_for_visit' => $reason,
             'status' => $validated['status'],
         ]);
+
+        // Create notification with the appointment status
+        try {
+            AppointmentNotification::recordStatus($appointment->appointment_id, $validated['status']);
+        } catch (\Exception $e) {
+            \Log::error('Error creating appointment notification', ['error' => $e->getMessage()]);
+        }
 
         if (!empty($validated['vet_id'])) {
             $consultationDate = Carbon::createFromFormat(
@@ -222,16 +339,9 @@ $regularAppointments = Appointment::where('status', 'Approved')
      */
     public function approveAppointment(Request $request, $id)
     {
-        $appointment = Appointment::findOrFail($id);
+        $appointment = Appointment::with('pet.owner')->findOrFail($id);
 
-        $appointmentDateTime = $request->input('appointment_date');
-        if ($appointmentDateTime && str_contains($appointmentDateTime, 'T') && !$request->filled('appointment_time')) {
-            [$date, $time] = explode('T', $appointmentDateTime, 2);
-            $request->merge([
-                'appointment_date' => $date,
-                'appointment_time' => $time,
-            ]);
-        }
+        AppointmentScheduleService::normalizeDateTimeInput($request);
 
         if (!$request->filled('consultation_mode')) {
             $request->merge(['consultation_mode' => 'In-clinic']);
@@ -249,13 +359,16 @@ $regularAppointments = Appointment::where('status', 'Approved')
             $request->merge(['status' => $statusMap[$normalized] ?? $request->input('status')]);
         }
 
-        $validated = $request->validate([
+        $validator = Validator::make($request->all(), [
             'appointment_date' => 'required|date_format:Y-m-d',
             'appointment_time' => 'required|date_format:H:i',
             'consultation_mode' => 'required|in:In-clinic,Teleconsultation',
+            
             'status' => 'required|in:Pending,Approved,Rescheduled,Completed,Cancelled',
             'vet_id' => 'nullable|exists:users,user_id',
         ]);
+        $validator->after(fn ($validator) => AppointmentScheduleService::validateSlot($validator, $request, $appointment->appointment_id));
+        $validated = $validator->validate();
 
         $appointment->update([
             'appointment_date' => $validated['appointment_date'],
@@ -263,6 +376,20 @@ $regularAppointments = Appointment::where('status', 'Approved')
             'consultation_mode' => $validated['consultation_mode'],
             'status' => $validated['status'],
         ]);
+
+        // Record the latest notification row for this appointment/status pair.
+        try {
+            AppointmentNotification::recordStatus($appointment->appointment_id, $validated['status']);
+            \Log::info('Appointment notification created', [
+                'appointment_id' => $appointment->appointment_id,
+                'status' => $validated['status'],
+            ]);
+        } catch (\Exception $e) {
+            \Log::error('Error creating appointment notification', [
+                'error' => $e->getMessage(),
+                'appointment_id' => $appointment->appointment_id,
+            ]);
+        }
 
         if (!empty($validated['vet_id'])) {
             $consultationDate = Carbon::createFromFormat(
@@ -304,6 +431,13 @@ $regularAppointments = Appointment::where('status', 'Approved')
         }
 
         $appointment->update(['status' => 'Cancelled']);
+
+        // Create notification for rejected appointment
+        try {
+            AppointmentNotification::recordStatus($appointment->appointment_id, 'Cancelled');
+        } catch (\Exception $e) {
+            \Log::error('Error creating rejected appointment notification', ['error' => $e->getMessage()]);
+        }
 
         return redirect()->route('staff.queue')->with('success', 'Appointment rejected successfully');
     }
@@ -398,7 +532,7 @@ $regularAppointments = Appointment::where('status', 'Approved')
             'user_id' => 'required|exists:users,user_id',
             'species' => 'required|string|max:50',
             'breed' => 'required|string|max:100',
-            'date_of_birth' => 'required|date|before:today',
+            'date_of_birth' => 'required|date|before_or_equal:today',
             'weight' => 'required|numeric|min:0.1|max:200',
             'sex' => 'required|in:Male,Female,Other',
         ]);
@@ -431,7 +565,7 @@ $regularAppointments = Appointment::where('status', 'Approved')
             'pet_name' => 'required|string|max:100',
             'species' => 'required|string|max:50',
             'breed' => 'required|string|max:100',
-            'date_of_birth' => 'required|date|before:today',
+            'date_of_birth' => 'required|date|before_or_equal:today',
             'weight' => 'required|numeric|min:0.1|max:200',
             'sex' => 'required|in:Male,Female,Other',
         ]);
@@ -442,17 +576,7 @@ $regularAppointments = Appointment::where('status', 'Approved')
                        ->with('success', 'Patient information updated successfully!');
     }
 
-    /**
-     * SECTION 2.3: TELECONSULTATION SCHEDULE MANAGEMENT
-     */
-
-    /**
-     * SECTION 2.4: E-PRESCRIPTIONS AND MEDICAL RECORDS ACCESS
-     */
-
-    /**
-     * View all prescriptions
-     */
+  
     public function prescriptions(Request $request)
     {
         $query = EPrescription::with([
@@ -535,7 +659,7 @@ $regularAppointments = Appointment::where('status', 'Approved')
 
         $medicalRecords = $query->orderBy('created_at', 'desc')->paginate(20);
 
-        return view('staff.medical-records.index', compact('medicalRecords'));
+        return view('medical-records.staff-index', compact('medicalRecords'));
     }
 
     /**
@@ -546,11 +670,12 @@ $regularAppointments = Appointment::where('status', 'Approved')
         $medicalRecord = MedicalRecord::with([
             'pet.owner',
             'consultation.veterinarian',
+            'consultation.appointment',
             'prescriptions' => fn ($query) => $query->orderByDesc('issued_at'),
             'prescriptions.adherenceLogs' => fn ($query) => $query->orderByDesc('scheduled_datetime'),
         ])->findOrFail($recordId);
 
-        return view('staff.medical-records.details', compact('medicalRecord'));
+        return view('medical-records.staff-details', compact('medicalRecord'));
     }
 
     /**
@@ -574,6 +699,8 @@ $regularAppointments = Appointment::where('status', 'Approved')
             ->whereBetween('appointment_date', [$fromDate, $toDate])->count();
         $cancelledAppointments = Appointment::where('status', 'Cancelled')
             ->whereBetween('appointment_date', [$fromDate, $toDate])->count();
+        $missedAppointments = Appointment::where('status', 'Missed')
+            ->whereBetween('appointment_date', [$fromDate, $toDate])->count();
 
         // Appointment distribution by mode
         $appointmentsByMode = Appointment::selectRaw('consultation_mode, count(*) as count')
@@ -582,25 +709,35 @@ $regularAppointments = Appointment::where('status', 'Approved')
             ->get();
 
         // Consultation Statistics
-        $totalConsultations = Consultation::whereBetween('consultation_date', [$fromDate, $toDate])->count();
+        $totalConsultations = Consultation::whereDate('consultation_date', '>=', $fromDate)
+            ->whereDate('consultation_date', '<=', $toDate)
+            ->count();
         $completedConsultations = Consultation::where('status', 'Completed')
-            ->whereBetween('consultation_date', [$fromDate, $toDate])->count();
+            ->whereDate('consultation_date', '>=', $fromDate)
+            ->whereDate('consultation_date', '<=', $toDate)
+            ->count();
 
         // Prescription Statistics
-        $totalPrescriptions = EPrescription::whereBetween('issued_at', [$fromDate, $toDate])->count();
+        $totalPrescriptions = EPrescription::whereDate('issued_at', '>=', $fromDate)
+            ->whereDate('issued_at', '<=', $toDate)
+            ->count();
         $prescriptionsByCompliance = AdherenceLog::selectRaw('intake_status, count(*) as count')
-            ->whereBetween('scheduled_datetime', [$fromDate, $toDate])
+            ->whereDate('scheduled_datetime', '>=', $fromDate)
+            ->whereDate('scheduled_datetime', '<=', $toDate)
             ->groupBy('intake_status')
             ->get();
 
         // Medical Records
-        $totalMedicalRecords = MedicalRecord::whereBetween('created_at', [$fromDate, $toDate])->count();
+        $totalMedicalRecords = MedicalRecord::whereDate('created_at', '>=', $fromDate)
+            ->whereDate('created_at', '<=', $toDate)
+            ->count();
 
         return view('staff.reports.dashboard', compact(
             'totalAppointments',
             'approvedAppointments',
             'completedAppointments',
             'cancelledAppointments',
+            'missedAppointments',
             'appointmentsByMode',
             'totalConsultations',
             'completedConsultations',
@@ -635,6 +772,7 @@ $regularAppointments = Appointment::where('status', 'Approved')
             'approved' => $this->countAppointmentsByStatus('Approved', $fromDate, $toDate),
             'completed' => $this->countAppointmentsByStatus('Completed', $fromDate, $toDate),
             'cancelled' => $this->countAppointmentsByStatus('Cancelled', $fromDate, $toDate),
+            'missed' => $this->countAppointmentsByStatus('Missed', $fromDate, $toDate),
         ];
 
         return view('staff.reports.appointments', compact('appointments', 'stats', 'fromDate', 'toDate'));
@@ -649,7 +787,8 @@ $regularAppointments = Appointment::where('status', 'Approved')
         $toDate = $request->input('to_date', now()->endOfMonth()->toDateString());
 
         $consultations = Consultation::with('appointment.pet.owner', 'veterinarian', 'messages')
-            ->whereBetween('consultation_date', [$fromDate, $toDate]);
+            ->whereDate('consultation_date', '>=', $fromDate)
+            ->whereDate('consultation_date', '<=', $toDate);
 
         // Filter by veterinarian
         if ($request->filled('veterinarian_id')) {
@@ -687,7 +826,8 @@ $regularAppointments = Appointment::where('status', 'Approved')
             'medicalRecord.pet.owner',
             'medicalRecord.consultation.veterinarian',
             'adherenceLogs',
-        ])->whereBetween('issued_at', [$fromDate, $toDate]);
+        ])->whereDate('issued_at', '>=', $fromDate)
+            ->whereDate('issued_at', '<=', $toDate);
 
         // Filter by medication
         if ($request->filled('medication')) {
@@ -801,7 +941,8 @@ $regularAppointments = Appointment::where('status', 'Approved')
     private function countConsultationsByStatus($status, $fromDate, $toDate)
     {
         return Consultation::where('status', $status)
-            ->whereBetween('consultation_date', [$fromDate, $toDate])
+            ->whereDate('consultation_date', '>=', $fromDate)
+            ->whereDate('consultation_date', '<=', $toDate)
             ->count();
     }
 
@@ -811,21 +952,13 @@ $regularAppointments = Appointment::where('status', 'Approved')
     private function pendingAppointmentQueueData(): array
     {
         $pendingAppointments = Appointment::where('status', 'Pending')
-            ->with(['pet.owner', 'pet.symptomLogs'])
+            ->with(['pet.owner'])
             ->orderBy('appointment_date')
             ->get();
 
-        $emergencyQueue = $pendingAppointments->filter(function ($appointment) {
-            $latestSymptom = $appointment->pet->symptomLogs->last();
+        $emergencyQueue = collect();
 
-            return $latestSymptom && in_array($latestSymptom->concern_level, ['emergency', 'urgent', 'critical'], true);
-        });
-
-        $highPriorityQueue = $pendingAppointments->filter(function ($appointment) {
-            $latestSymptom = $appointment->pet->symptomLogs->last();
-
-            return $latestSymptom && in_array($latestSymptom->concern_level, ['high priority', 'vet_visit', 'priority'], true);
-        });
+        $highPriorityQueue = $pendingAppointments;
 
         $routineQueue = $pendingAppointments->filter(function ($appointment) use ($emergencyQueue, $highPriorityQueue) {
             return ! $emergencyQueue->contains('id', $appointment->id)
@@ -845,30 +978,79 @@ $regularAppointments = Appointment::where('status', 'Approved')
         $todayStartUtc = $manilaNow->copy()->startOfDay()->utc();
         $todayEndUtc = $manilaNow->copy()->endOfDay()->utc();
         $recentWindowStartUtc = $manilaNow->copy()->subHours(24)->utc();
+        $dismissedKeys = StaffNotificationDismissal::where('user_id', auth()->id())
+            ->pluck('notification_key')
+            ->all();
 
         $newAppointmentEntries = Appointment::with('pet.owner')
             ->where('created_at', '>=', $recentWindowStartUtc)
             ->orderByDesc('created_at')
             ->limit(12)
-            ->get();
+            ->get()
+            ->reject(fn (Appointment $appointment) => in_array(
+                $this->staffNotificationKey('new-appointment', $appointment->appointment_id),
+                $dismissedKeys,
+                true
+            ))
+            ->values();
 
         $cancelledTodayAppointments = Appointment::with('pet.owner')
             ->where('status', 'Cancelled')
             ->whereBetween('updated_at', [$todayStartUtc, $todayEndUtc])
             ->orderByDesc('updated_at')
             ->limit(12)
-            ->get();
+            ->get()
+            ->reject(fn (Appointment $appointment) => in_array(
+                $this->staffNotificationKey('cancelled-appointment', $appointment->appointment_id),
+                $dismissedKeys,
+                true
+            ))
+            ->values();
 
         $recentDidNotArriveAppointments = Appointment::with('pet.owner')
             ->where('status', 'Missed')
             ->where('updated_at', '>=', $recentWindowStartUtc)
             ->orderByDesc('updated_at')
             ->limit(12)
-            ->get();
+            ->get()
+            ->reject(fn (Appointment $appointment) => in_array(
+                $this->staffNotificationKey('did-not-arrive', $appointment->appointment_id),
+                $dismissedKeys,
+                true
+            ))
+            ->values();
+
+        $adherenceNotifications = AdherenceNotification::with([
+            'user',
+            'adherenceLog.prescription.medicalRecord.pet.owner',
+        ])
+            ->where('status', 'Confirmed')
+            ->whereNotNull('confirmed_at')
+            ->where(function ($query) use ($recentWindowStartUtc) {
+                $query->where('confirmed_at', '>=', $recentWindowStartUtc)
+                    ->orWhere('scheduled_at', '>=', $recentWindowStartUtc);
+            })
+            ->orderByDesc('confirmed_at')
+            ->limit(12)
+            ->get()
+            ->reject(fn (AdherenceNotification $notification) => in_array(
+                $this->staffNotificationKey('adherence', $notification->notification_id),
+                $dismissedKeys,
+                true
+            ))
+            ->values();
 
         $totalLiveAlerts = $newAppointmentEntries->count()
             + $cancelledTodayAppointments->count()
-            + $recentDidNotArriveAppointments->count();
+            + $recentDidNotArriveAppointments->count()
+            + $adherenceNotifications->count();
+
+        $staffNotifications = $this->buildStaffNotificationRows(
+            $newAppointmentEntries,
+            $cancelledTodayAppointments,
+            $recentDidNotArriveAppointments,
+            $adherenceNotifications
+        );
 
         return compact(
             'manilaNow',
@@ -876,8 +1058,111 @@ $regularAppointments = Appointment::where('status', 'Approved')
             'newAppointmentEntries',
             'cancelledTodayAppointments',
             'recentDidNotArriveAppointments',
+            'adherenceNotifications',
+            'staffNotifications',
             'totalLiveAlerts'
         );
+    }
+
+    private function buildStaffNotificationRows(
+        Collection $newAppointmentEntries,
+        Collection $cancelledTodayAppointments,
+        Collection $recentDidNotArriveAppointments,
+        Collection $adherenceNotifications
+    ): array {
+        $rows = [];
+
+        foreach ($newAppointmentEntries as $appointment) {
+            $rows[] = $this->appointmentNotificationRow(
+                'New Appointment',
+                'new-appointment',
+                'type-new',
+                $appointment,
+                $appointment->created_at?->copy()->timezone('Asia/Manila'),
+                strtolower($appointment->consultation_mode ?? 'clinic') . ' appointment',
+                route('staff.appointments.confirm', $appointment),
+                true
+            );
+        }
+
+        foreach ($cancelledTodayAppointments as $appointment) {
+            $rows[] = $this->appointmentNotificationRow(
+                'Appointment Cancelled',
+                'cancelled-appointment',
+                'type-cancelled',
+                $appointment,
+                $appointment->updated_at?->copy()->timezone('Asia/Manila'),
+                'cancelled appointment',
+                null,
+                false
+            );
+        }
+
+        foreach ($recentDidNotArriveAppointments as $appointment) {
+            $rows[] = $this->appointmentNotificationRow(
+                'Did Not Arrive',
+                'did-not-arrive',
+                'type-missed',
+                $appointment,
+                $appointment->updated_at?->copy()->timezone('Asia/Manila'),
+                'missed appointment',
+                null,
+                false
+            );
+        }
+
+        foreach ($adherenceNotifications as $notification) {
+            $prescription = $notification->adherenceLog?->prescription;
+            $pet = $prescription?->medicalRecord?->pet;
+            $owner = $pet?->owner ?? $notification->user;
+
+            $rows[] = [
+                'type' => 'Adherence',
+                'route_type' => 'adherence',
+                'id' => $notification->notification_id,
+                'pet' => $pet?->name ?? 'Unknown Pet',
+                'owner' => $owner?->name ?? $owner?->full_name ?? 'Unknown Owner',
+                'message' => "{$notification->medication_name} {$notification->dosage} taken as scheduled",
+                'time' => $notification->confirmed_at?->copy()->timezone('Asia/Manila')
+                    ?? $notification->scheduled_at?->copy()->timezone('Asia/Manila'),
+                'route' => $prescription ? route('staff.prescriptions.details', $prescription) : null,
+                'can_view' => $prescription !== null,
+                'class' => 'type-adherence',
+            ];
+        }
+
+        usort($rows, fn ($a, $b) => $b['time']?->getTimestamp() <=> $a['time']?->getTimestamp());
+
+        return $rows;
+    }
+
+    private function appointmentNotificationRow(
+        string $type,
+        string $routeType,
+        string $class,
+        Appointment $appointment,
+        ?Carbon $time,
+        string $message,
+        ?string $route,
+        bool $canView
+    ): array {
+        return [
+            'type' => $type,
+            'route_type' => $routeType,
+            'pet' => $appointment->pet?->name ?? 'Unknown Pet',
+            'owner' => $appointment->pet?->owner?->name ?? $appointment->pet?->owner?->full_name ?? 'Unknown Owner',
+            'message' => $message,
+            'time' => $time,
+            'id' => $appointment->appointment_id,
+            'route' => $route,
+            'can_view' => $canView,
+            'class' => $class,
+        ];
+    }
+
+    private function staffNotificationKey(string $type, int $id): string
+    {
+        return "{$type}:{$id}";
     }
 
     /**
@@ -912,5 +1197,145 @@ $regularAppointments = Appointment::where('status', 'Approved')
                 return $compliance < 80;
             })
             ->count();
+    }
+
+    /**
+     * Display all clients (pet owners)
+     */
+    public function clients()
+    {
+        $clients = User::where('role', 'Pet Owner')->paginate(20);
+        return view('staff.clients', compact('clients'));
+    }
+
+    /**
+     * Show client registration form
+     */
+    public function registerClient()
+    {
+        return view('staff.register-client');
+    }
+
+    /**
+     * Store new client
+     */
+    public function storeClient(Request $request)
+    {
+        $validated = $request->validate([
+            'full_name' => 'required|string|max:255',
+            'email' => 'required|email|max:255|unique:users,email',
+            'contact_no' => 'nullable|string|max:20',
+            'address' => 'nullable|string|max:1000',
+            'password' => 'required|string|min:6|confirmed',
+        ]);
+
+        $validated['password'] = bcrypt($validated['password']);
+        $validated['role'] = 'Pet Owner';
+        $validated['status'] = 'Active';
+
+        User::create($validated);
+
+        return redirect()->route('staff.clients')->with('success', 'Client registered successfully');
+    }
+
+    /**
+     * Display all pets
+     */
+    public function pets()
+    {
+        $query = Pet::with('owner');
+        
+        // Filter by owner if provided
+        if (request('owner_id')) {
+            $query->where('user_id', request('owner_id'));
+        }
+        
+        $pets = $query->paginate(20);
+        $owners = User::where('role', 'Pet Owner')->get();
+        return view('staff.pets', compact('pets', 'owners'));
+    }
+
+    /**
+     * Show pet creation form
+     */
+    public function createPet()
+    {
+        $owners = User::where('role', 'Pet Owner')->get();
+        return view('staff.add-pet', compact('owners'));
+    }
+
+    /**
+     * Store new pet
+     */
+    public function storePet(Request $request)
+    {
+        $validated = $request->validate([
+            'user_id' => 'required|exists:users,user_id',
+            'pet_name' => 'required|string|max:255',
+            'species' => 'required|string|max:100',
+            'breed' => 'nullable|string|max:100',
+            'color' => 'nullable|in:Black,White,Brown,Tan,Cream,Gray,Golden,Red,Orange,Mixed,Other',
+            'date_of_birth' => 'nullable|date|before_or_equal:today',
+            'weight' => 'nullable|numeric',
+            'sex' => 'required|in:Male,Female',
+        ]);
+
+        Pet::create($validated);
+
+        return redirect()->route('staff.pets')->with('success', 'Pet added successfully');
+    }
+
+    /**
+     * Show pet edit form
+     */
+    public function editPet($id)
+    {
+        $pet = Pet::findOrFail($id);
+        $owners = User::where('role', 'Pet Owner')->get();
+        return view('staff.edit-pet', compact('pet', 'owners'));
+    }
+
+    /**
+     * Update pet in database
+     */
+    public function updatePet(Request $request, $id)
+    {
+        $pet = Pet::findOrFail($id);
+
+        $validated = $request->validate([
+            'user_id' => 'required|exists:users,user_id',
+            'pet_name' => 'required|string|max:255',
+            'species' => 'required|string|max:100',
+            'breed' => 'nullable|string|max:100',
+            'color' => 'nullable|in:Black,White,Brown,Tan,Cream,Gray,Golden,Red,Orange,Mixed,Other',
+            'date_of_birth' => 'nullable|date|before_or_equal:today',
+            'weight' => 'nullable|numeric',
+            'sex' => 'required|in:Male,Female',
+        ]);
+
+        $pet->update($validated);
+
+        return redirect()->route('staff.pets')->with('success', 'Pet updated successfully');
+    }
+
+    /**
+     * Show delete confirmation page
+     */
+    public function confirmDeletePet($id)
+    {
+        $pet = Pet::findOrFail($id);
+        return view('staff.confirm-delete-pet', compact('pet'));
+    }
+
+    /**
+     * Delete pet from database
+     */
+    public function deletePet($id)
+    {
+        $pet = Pet::findOrFail($id);
+        $petName = $pet->pet_name;
+        $pet->delete();
+
+        return redirect()->route('staff.pets')->with('success', "Pet '{$petName}' has been deleted.");
     }
 }

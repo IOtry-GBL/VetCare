@@ -5,7 +5,10 @@ namespace App\Services;
 use App\Models\AdherenceLog;
 use App\Models\AdherenceNotification;
 use App\Models\EPrescription;
+use App\Mail\AdherenceReminderMail;
 use Carbon\Carbon;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
 
 /**
@@ -192,6 +195,8 @@ class AdherenceService
      */
     public static function createReminderForDose(AdherenceLog $adherenceLog): ?AdherenceNotification
     {
+        $adherenceLog->loadMissing('prescription.medicalRecord.pet.owner', 'notification');
+
         $prescription = $adherenceLog->prescription;
         if (!$prescription || !$prescription->medicalRecord) {
             return null;
@@ -199,11 +204,6 @@ class AdherenceService
 
         $user = $prescription->medicalRecord->pet->owner;
         if (!$user) {
-            return null;
-        }
-
-        // Check if reminder already exists
-        if (AdherenceNotification::where('adherence_id', $adherenceLog->adherence_id)->exists()) {
             return null;
         }
 
@@ -218,16 +218,59 @@ class AdherenceService
             'is_notified' => true,
         ]);
 
-        // Create notification
-        return AdherenceNotification::create([
-            'user_id' => $user->user_id,
-            'adherence_id' => $adherenceLog->adherence_id,
-            'medication_name' => $prescription->medication_name,
-            'dosage' => $prescription->dosage,
-            'scheduled_at' => $scheduledTime,
-            'confirmation_deadline' => $deadlineTime,
-            'status' => 'Pending',
-        ]);
+        $notification = AdherenceNotification::updateOrCreate(
+            ['adherence_id' => $adherenceLog->adherence_id],
+            [
+                'user_id' => $user->user_id,
+                'medication_name' => $prescription->medication_name,
+                'dosage' => $prescription->dosage,
+                'scheduled_at' => $scheduledTime,
+                'confirmation_deadline' => $deadlineTime,
+                'status' => $adherenceLog->intake_status === 'Pending' ? 'Pending' : 'Confirmed',
+            ]
+        );
+
+        if ($notification->wasRecentlyCreated && $notification->status === 'Pending') {
+            self::sendReminderEmail($notification);
+        }
+
+        return $notification;
+    }
+
+    /**
+     * Send the email associated with a newly-created adherence reminder.
+     */
+    public static function sendReminderEmail(AdherenceNotification $notification): void
+    {
+        $notification->loadMissing('user');
+
+        $user = $notification->user;
+        if (!$user?->email) {
+            return;
+        }
+
+        try {
+            $scheduledAt = $notification->scheduled_at;
+            $deadline = $notification->confirmation_deadline;
+
+            if (! $scheduledAt || ! $deadline) {
+                throw new \RuntimeException('Adherence reminder is missing its scheduled time or confirmation deadline.');
+            }
+
+            Mail::to($user->email)->later($scheduledAt, (new AdherenceReminderMail(
+                recipientName: $user->full_name,
+                medicationName: $notification->medication_name ?? 'Medication Due',
+                dosage: $notification->dosage ?? 'As prescribed',
+                scheduledAt: $scheduledAt->copy()->timezone(self::clinicTimezone()),
+                deadline: $deadline->copy()->timezone(self::clinicTimezone()),
+            ))->onConnection('database')->onQueue('emails'));
+        } catch (\Throwable $exception) {
+            Log::error('Adherence reminder email failed', [
+                'user_id' => $user->user_id,
+                'notification_id' => $notification->notification_id,
+                'error' => $exception->getMessage(),
+            ]);
+        }
     }
 
     /**
@@ -260,6 +303,99 @@ class AdherenceService
         }
 
         return $notifications;
+    }
+
+    public static function ensureNextPendingDoseNotificationForUser(int $userId): ?AdherenceNotification
+    {
+        $nextDose = AdherenceLog::with('prescription.medicalRecord.pet.owner', 'notification')
+            ->where('intake_status', 'Pending')
+            ->whereHas('prescription.medicalRecord.pet', function ($query) use ($userId) {
+                $query->where('user_id', $userId);
+            })
+            ->orderBy('scheduled_datetime')
+            ->first();
+
+        return $nextDose ? self::createReminderForDose($nextDose) : null;
+    }
+
+    public static function markExpiredPendingDosesForUser(int $userId): int
+    {
+        $expiredLogs = AdherenceLog::with('prescription.medicalRecord.pet.owner', 'notification')
+            ->where('intake_status', 'Pending')
+            ->whereHas('prescription.medicalRecord.pet', function ($query) use ($userId) {
+                $query->where('user_id', $userId);
+            })
+            ->get()
+            ->filter(fn (AdherenceLog $log) => $log->isExpiredForConfirmation());
+
+        $count = 0;
+
+        foreach ($expiredLogs as $log) {
+            self::markDoseAsMissed($log);
+            $count++;
+        }
+
+        return $count;
+    }
+
+    public static function markExpiredPendingDosesForPrescription(EPrescription $prescription): int
+    {
+        $expiredLogs = $prescription->adherenceLogs()
+            ->with('prescription.medicalRecord.pet.owner', 'notification')
+            ->where('intake_status', 'Pending')
+            ->get()
+            ->filter(fn (AdherenceLog $log) => $log->isExpiredForConfirmation());
+
+        $count = 0;
+
+        foreach ($expiredLogs as $log) {
+            self::markDoseAsMissed($log);
+            $count++;
+        }
+
+        return $count;
+    }
+
+    public static function markDoseAsMissed(AdherenceLog $adherenceLog): void
+    {
+        $adherenceLog->loadMissing('prescription.medicalRecord.pet.owner', 'notification');
+
+        $deadline = $adherenceLog->resolvedConfirmationDeadline();
+
+        $adherenceLog->update([
+            'confirmation_deadline' => $deadline,
+            'intake_status' => 'Missed',
+            'is_notified' => true,
+        ]);
+
+        $notification = $adherenceLog->notification;
+
+        if ($notification) {
+            $notification->update([
+                'scheduled_at' => $adherenceLog->scheduled_datetime,
+                'confirmation_deadline' => $deadline,
+                'status' => 'Missed',
+            ]);
+
+            return;
+        }
+
+        $prescription = $adherenceLog->prescription;
+        $owner = $prescription?->medicalRecord?->pet?->owner;
+
+        if (!$prescription || !$owner) {
+            return;
+        }
+
+        AdherenceNotification::create([
+            'user_id' => $owner->user_id,
+            'adherence_id' => $adherenceLog->adherence_id,
+            'medication_name' => $prescription->medication_name,
+            'dosage' => $prescription->dosage,
+            'scheduled_at' => $adherenceLog->scheduled_datetime,
+            'confirmation_deadline' => $deadline,
+            'status' => 'Missed',
+        ]);
     }
 
     /**
@@ -343,13 +479,14 @@ class AdherenceService
      */
     public static function markExpiredAsMissed(): int
     {
-        $expired = AdherenceNotification::where('status', 'Pending')
-            ->where('confirmation_deadline', '<=', now())
-            ->get();
+        $expired = AdherenceLog::with('prescription.medicalRecord.pet.owner', 'notification')
+            ->where('intake_status', 'Pending')
+            ->get()
+            ->filter(fn (AdherenceLog $log) => $log->isExpiredForConfirmation());
 
         $count = 0;
-        foreach ($expired as $notification) {
-            $notification->markAsMissed();
+        foreach ($expired as $log) {
+            self::markDoseAsMissed($log);
             $count++;
         }
 

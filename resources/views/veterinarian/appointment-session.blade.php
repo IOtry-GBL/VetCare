@@ -22,6 +22,18 @@
                 'duration' => '',
             ],
         ]);
+        $systemFamilyName = $owner?->name ?? 'Not on record';
+        $systemVisitType = $appointment->consultation_mode ?? 'In-clinic';
+        $systemAddress = $owner?->address ?? 'Not on record';
+        $systemDate = $appointment->appointment_date?->format('M d, Y') ?? 'N/A';
+        $systemCell = $owner?->phone ?? 'N/A';
+        $systemSpecies = $pet?->species ?? 'N/A';
+        $systemBreed = $pet?->breed ?? 'N/A';
+        $systemBirthday = $pet?->date_of_birth?->format('M d, Y') ?? 'N/A';
+        $systemAge = $pet?->age_display ?? ($pet?->age !== null ? $pet->age.' years' : 'N/A');
+        $systemSex = $pet?->sex ?? 'N/A';
+        $systemColor = $pet?->color ?? 'Not on record';
+        $attendingVet = $consultation?->veterinarian?->name ?? auth()->user()?->name ?? 'Veterinarian';
     @endphp
 
     <section class="hero-card">
@@ -42,6 +54,17 @@
     @if (session('success'))
         <div class="alert alert-info">
             {{ session('success') }}
+        </div>
+    @endif
+
+    @if ($errors->any())
+        <div class="alert alert-danger">
+            Please correct the highlighted fields before saving the session.
+            <ul style="margin: 0.5rem 0 0 1.25rem;">
+                @foreach ($errors->all() as $error)
+                    <li>{{ $error }}</li>
+                @endforeach
+            </ul>
         </div>
     @endif
 
@@ -69,83 +92,150 @@
     </div>
 
     <div class="info-grid" style="margin-top: 1rem;">
-        <div class="detail-panel">
+        <div class="detail-panel" style="grid-column: 1 / -1;">
             <span class="detail-label">Reason For Visit</span>
             <p>{{ $appointment->reason ?: 'No reason was recorded for this appointment.' }}</p>
         </div>
-        <div class="detail-panel">
-            <span class="detail-label">Chief Complaint</span>
-            <p>{{ $consultation->chief_complaint ?: 'No chief complaint has been recorded yet.' }}</p>
-        </div>
     </div>
 
-    <section class="card" style="margin-top: 1.2rem;">
-        <div class="surface-header">
+    <section class="card intake-sheet" style="margin-top: 1.2rem;">
+        <div class="surface-header compact-header">
             <div>
                 <h2>Session Record</h2>
-                <p class="section-copy">Complete the consultation details below and save the appointment as completed.</p>
             </div>
         </div>
 
         <form action="{{ route('vet.appointments.session.store', $appointment) }}" method="POST" class="stack">
             @csrf
 
-            <div class="form-grid">
-                <div class="field">
-                    <label class="field-label" for="chief_complaint">Chief Complaint</label>
-                    <textarea id="chief_complaint" name="chief_complaint" class="field-control" placeholder="Summarize the main complaint for this session.">{{ old('chief_complaint', $consultation->chief_complaint ?: $appointment->reason) }}</textarea>
-                    @error('chief_complaint')
-                        <p class="field-error">{{ $message }}</p>
-                    @enderror
+            <div class="intake-shell compact-intake-shell">
+                <div class="intake-panel compact-intake-panel">
+                    <div class="intake-row compact-row">
+                        <div class="intake-label">Family Name:</div>
+                        <div class="intake-value">{{ $systemFamilyName }}</div>
+                    </div>
+
+                    <div class="intake-row compact-row">
+                        <div class="intake-label">Address:</div>
+                        <div class="intake-value">{{ $systemAddress }}</div>
+                    </div>
+
+                    <div class="intake-row compact-row">
+                        <div class="intake-label">Species:</div>
+                        <div class="intake-value">{{ $systemSpecies }}</div>
+                    </div>
+
+                    <div class="intake-row compact-row">
+                        <div class="intake-label">Breed:</div>
+                        <div class="intake-value">{{ $systemBreed }}</div>
+                    </div>
+
+                    <div class="intake-row compact-row">
+                        <div class="intake-label">Birthday:</div>
+                        <div class="intake-value">{{ $systemBirthday }}</div>
+                    </div>
+
+                    <div class="intake-row compact-row">
+                        <div class="intake-label">Age:</div>
+                        <div class="intake-value">{{ $systemAge }}</div>
+                    </div>
+
+                    <div class="intake-row compact-row">
+                        <div class="intake-label">Sex:</div>
+                        <div class="intake-value">{{ $systemSex }}</div>
+                    </div>
+
+                    <div class="intake-row compact-row">
+                        <div class="intake-label">Color:</div>
+                        <div class="intake-value">{{ $systemColor }}</div>
+                    </div>
+
+                    <div class="intake-row compact-row intake-row--field">
+                        <label class="intake-label" for="food">Food:</label>
+                        <input id="food" name="food" type="text" class="field-control compact-field" value="{{ old('food') }}" placeholder="e.g. Royal Canin Adult">
+                    </div>
+
+                    <div class="intake-row compact-row intake-row--field">
+                        <label class="intake-label" for="environment">Environment:</label>
+                        <input id="environment" name="environment" type="text" class="field-control compact-field" value="{{ old('environment') }}" placeholder="Indoor / outdoor / cage / home setting">
+                    </div>
+
+                    <div class="intake-row compact-row intake-row--field intake-row--textarea">
+                        <label class="intake-label" for="reason_for_visit">Reason for Visit:</label>
+                        <div id="reason_for_visit" class="intake-value">{{ $appointment->reason_for_visit ?? 'Not recorded' }}</div>
+                    </div>
+
+                    <div class="intake-row compact-row intake-row--field intake-row--textarea">
+                        <label class="intake-label" for="diagnosis">Diagnosis:</label>
+                        <textarea id="diagnosis" name="diagnosis" class="field-control compact-field" placeholder="Document the diagnosis and clinical findings.">{{ old('diagnosis', $medicalRecord?->diagnosis) }}</textarea>
+                        @error('diagnosis')
+                            <p class="field-error">{{ $message }}</p>
+                        @enderror
+                    </div>
+
+                    <div class="intake-row compact-row intake-row--field intake-row--textarea">
+                        <label class="intake-label" for="treatment_plan">Line of Treatment:</label>
+                        <textarea id="treatment_plan" name="treatment_plan" class="field-control compact-field" placeholder="Outline the medical plan, medications, and follow-up steps.">{{ old('treatment_plan', $medicalRecord?->treatment_plan) }}</textarea>
+                        @error('treatment_plan')
+                            <p class="field-error">{{ $message }}</p>
+                        @enderror
+                    </div>
+
+                    <div class="intake-row compact-row intake-row--field">
+                        <label class="intake-label" for="attending_vet">Attending Vet:</label>
+                        <input id="attending_vet" name="attending_vet" type="text" class="field-control compact-field" value="{{ old('attending_vet', $attendingVet) }}" readonly>
+                    </div>
+
+                    <div class="intake-row compact-row intake-row--field">
+                        <label class="intake-label" for="fee">Fee:</label>
+                        <input id="fee" name="fee" type="text" class="field-control compact-field" value="{{ old('fee') }}" placeholder="₱0.00">
+                        @error('fee')
+                            <p class="field-error">{{ $message }}</p>
+                        @enderror
+                    </div>
                 </div>
 
-                <div class="field">
-                    <label class="field-label" for="consultation_notes">Consultation Notes</label>
-                    <textarea id="consultation_notes" name="consultation_notes" class="field-control" placeholder="Document observations, exam findings, and owner instructions.">{{ old('consultation_notes', $consultation->consultation_notes) }}</textarea>
-                    @error('consultation_notes')
-                        <p class="field-error">{{ $message }}</p>
-                    @enderror
-                </div>
-            </div>
+                <div class="intake-panel compact-intake-panel compact-intake-panel--right">
+                    <div class="intake-row compact-row">
+                        <div class="intake-label">Visit type:</div>
+                        <div class="intake-value">{{ $systemVisitType }}</div>
+                    </div>
 
-            <div class="form-grid">
-                <div class="field">
-                    <label class="field-label" for="diagnosis">Diagnosis</label>
-                    <textarea id="diagnosis" name="diagnosis" class="field-control" placeholder="Acute gastritis">{{ old('diagnosis', $medicalRecord?->diagnosis) }}</textarea>
-                    @error('diagnosis')
-                        <p class="field-error">{{ $message }}</p>
-                    @enderror
-                </div>
+                    <div class="intake-row compact-row">
+                        <div class="intake-label">Date:</div>
+                        <div class="intake-value">{{ $systemDate }}</div>
+                    </div>
 
-                <div class="field">
-                    <label class="field-label" for="treatment_plan">Treatment Plan</label>
-                    <textarea id="treatment_plan" name="treatment_plan" class="field-control" placeholder="Outline medications, diet, and home-care instructions.">{{ old('treatment_plan', $medicalRecord?->treatment_plan) }}</textarea>
-                    @error('treatment_plan')
-                        <p class="field-error">{{ $message }}</p>
-                    @enderror
-                </div>
-            </div>
+                    <div class="intake-row compact-row">
+                        <div class="intake-label">Cell#:</div>
+                        <div class="intake-value">{{ $systemCell }}</div>
+                    </div>
 
-            <div class="form-grid">
-                <div class="field">
-                    <label class="field-label" for="vaccination_notes">Vaccination Notes</label>
-                    <textarea id="vaccination_notes" name="vaccination_notes" class="field-control" placeholder="Record any vaccine status updates or reminders.">{{ old('vaccination_notes', $medicalRecord?->vaccination_notes) }}</textarea>
-                    @error('vaccination_notes')
-                        <p class="field-error">{{ $message }}</p>
-                    @enderror
-                </div>
+                    <div class="intake-row compact-row intake-row--field">
+                        <label class="intake-label" for="weight">Weight:</label>
+                        <input id="weight" name="weight" type="number" step="0.01" min="0" class="field-control compact-field" value="{{ old('weight', $medicalRecord?->weight) }}" placeholder="e.g. 6.5">
+                        @error('weight')
+                            <p class="field-error">{{ $message }}</p>
+                        @enderror
+                    </div>
 
-                <div class="field">
-                    <label class="field-label" for="follow_up_date">Follow-Up Date</label>
-                    <input
-                        id="follow_up_date"
-                        name="follow_up_date"
-                        type="date"
-                        class="field-control"
-                        value="{{ old('follow_up_date', $medicalRecord?->follow_up_date?->toDateString()) }}">
-                    @error('follow_up_date')
-                        <p class="field-error">{{ $message }}</p>
-                    @enderror
+                    <div class="intake-row compact-row intake-row--field">
+                        <label class="intake-label" for="temp">Temp:</label>
+                        <input id="temp" name="temp" type="number" step="0.01" min="0" max="100" class="field-control compact-field" value="{{ old('temp', $medicalRecord?->temp) }}" placeholder="e.g. 38.6">
+                        @error('temp')
+                            <p class="field-error">{{ $message }}</p>
+                        @enderror
+                    </div>
+
+                    <div class="intake-row compact-row compact-row--spacer"></div>
+
+                    <div class="intake-row compact-row intake-row--field">
+                        <label class="intake-label" for="follow_up_date">Follow update</label>
+                        <input id="follow_up_date" name="follow_up_date" type="date" class="field-control compact-field" value="{{ old('follow_up_date', $medicalRecord?->follow_up_date?->toDateString()) }}">
+                        @error('follow_up_date')
+                            <p class="field-error">{{ $message }}</p>
+                        @enderror
+                    </div>
                 </div>
             </div>
 
@@ -356,11 +446,178 @@
 
 @section('styles')
     <style>
+        .compact-header {
+            margin-bottom: 1rem;
+            padding-bottom: 0.8rem;
+            border-bottom: 1px solid rgba(23, 49, 61, 0.08);
+        }
+
+        .compact-header h2 {
+            margin: 0;
+            font-size: 1.35rem;
+            color: var(--shell-ink);
+            letter-spacing: -0.03em;
+        }
+
+        .intake-sheet {
+            background: linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(246, 250, 250, 0.92)) !important;
+            border: 1px solid rgba(23, 49, 61, 0.06) !important;
+            box-shadow: 0 18px 40px rgba(18, 41, 48, 0.06) !important;
+            padding: 1.25rem 1.2rem !important;
+            border-radius: 1.2rem !important;
+        }
+
+        .compact-intake-shell {
+            display: grid;
+            grid-template-columns: minmax(0, 1.12fr) minmax(0, 0.88fr);
+            gap: 0.95rem 1.5rem;
+            margin-bottom: 1.2rem;
+        }
+
+        .compact-intake-panel {
+            padding: 0.15rem 0;
+            border: none;
+            background: transparent;
+            box-shadow: none;
+        }
+
+        .compact-intake-panel--right {
+            padding-top: 0;
+        }
+
+        .compact-row {
+            display: grid;
+            grid-template-columns: minmax(120px, 170px) minmax(0, 1fr);
+            gap: 0.25rem 0.8rem;
+            align-items: center;
+            padding: 0.22rem 0.1rem;
+            border: none;
+            background: transparent;
+            border-radius: 0;
+            margin-bottom: 0.1rem;
+        }
+
+        .intake-row--field {
+            align-items: center;
+        }
+
+        .intake-row--textarea {
+            grid-template-columns: minmax(120px, 170px) minmax(0, 1fr);
+            align-items: start;
+            margin-top: 0.32rem;
+        }
+
+        .intake-label {
+            font-weight: 700;
+            color: var(--shell-ink);
+            line-height: 1.45;
+        }
+
+        .intake-value {
+            color: var(--shell-muted);
+            font-weight: 600;
+            line-height: 1.45;
+            word-break: break-word;
+        }
+
+        .compact-row--spacer {
+            min-height: 2.8rem;
+        }
+
+        .field-control {
+            width: 100%;
+            min-height: 48px;
+            padding: 0.8rem 1rem;
+            border: 1px solid rgba(23, 49, 61, 0.12);
+            border-radius: 0.95rem;
+            background: rgba(255, 255, 255, 0.96);
+            color: var(--shell-ink);
+            box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7);
+            transition: border-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
+        }
+
+        textarea.field-control {
+            min-height: 120px;
+            resize: vertical;
+        }
+
+        .field-control:focus {
+            border-color: rgba(15, 139, 141, 0.58);
+            box-shadow: 0 0 0 4px rgba(15, 139, 141, 0.12);
+            outline: none;
+        }
+
+        .field-control.compact-field {
+            width: 100%;
+            min-height: 24px;
+            padding: 0.15rem 0.2rem 0.22rem;
+            border: none !important;
+            border-bottom: 1px solid rgba(23, 49, 61, 0.12) !important;
+            background: transparent !important;
+            border-radius: 0;
+            color: var(--shell-ink);
+            box-shadow: none !important;
+            font: inherit;
+        }
+
+        .field-control.compact-field:focus {
+            border-bottom-color: rgba(15, 139, 141, 0.5) !important;
+            box-shadow: none !important;
+            outline: none;
+        }
+
+        textarea.field-control.compact-field {
+            min-height: 58px;
+            resize: vertical;
+            line-height: 1.45;
+            padding-top: 0.2rem;
+        }
+
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 46px;
+            padding: 0.76rem 1.15rem;
+            border-radius: 0.95rem;
+            border: none;
+            font-weight: 700;
+            transition: transform 0.18s ease, box-shadow 0.18s ease, opacity 0.18s ease;
+        }
+
+        .btn:hover {
+            transform: translateY(-1px);
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, var(--shell-accent), var(--shell-accent-deep));
+            color: white;
+            box-shadow: 0 18px 28px rgba(15, 139, 141, 0.18);
+        }
+
+        .btn-secondary {
+            background: rgba(23, 49, 61, 0.04);
+            color: var(--shell-ink);
+            box-shadow: inset 0 0 0 1px rgba(23, 49, 61, 0.08);
+        }
+
         .prescription-draft {
-            padding: 1.1rem;
-            border: 1px solid var(--shell-line);
-            border-radius: var(--shell-radius-lg);
-            background: rgba(255, 255, 255, 0.7);
+            border: 1px solid rgba(23, 49, 61, 0.08);
+            background: linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(244, 247, 248, 0.95));
+            box-shadow: 0 16px 30px rgba(23, 49, 61, 0.04);
+            border-radius: 1rem;
+            padding: 1rem;
+        }
+
+        @media (max-width: 768px) {
+            .compact-intake-shell {
+                grid-template-columns: 1fr;
+            }
+
+            .compact-row,
+            .intake-row--textarea {
+                grid-template-columns: minmax(100px, 140px) minmax(0, 1fr);
+            }
         }
     </style>
 @endsection

@@ -73,20 +73,36 @@
                 @enderror
             </div>
 
+            <div style="margin-bottom: 1.5rem;">
+                <label for="color" style="display: block; margin-bottom: 0.5rem; font-weight: 500;">Color</label>
+                <select
+                    id="color"
+                    name="color"
+                    style="width: 100%; padding: 0.75rem; border: 1px solid #d1d5db; border-radius: 0.375rem;"
+                >
+                    <option value="">-- Select Color --</option>
+                    @foreach(['Black', 'White', 'Brown', 'Tan', 'Cream', 'Gray', 'Golden', 'Red', 'Orange', 'Mixed', 'Other'] as $color)
+                        <option value="{{ $color }}" {{ old('color') == $color ? 'selected' : '' }}>{{ $color }}</option>
+                    @endforeach
+                </select>
+                @error('color')
+                    <p style="color: var(--color-emergency); font-size: 0.875rem; margin-top: 0.25rem;">{{ $message }}</p>
+                @enderror
+            </div>
+
             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1.5rem;">
                 <div>
-                    <label for="age" style="display: block; margin-bottom: 0.5rem; font-weight: 500;">Age (years) *</label>
-                    <input 
-                        type="number" 
-                        id="age" 
-                        name="age" 
-                        placeholder="0" 
+                    <label for="date_of_birth" style="display: block; margin-bottom: 0.5rem; font-weight: 500;">Date of Birth *</label>
+                    <input
+                        type="date"
+                        id="date_of_birth"
+                        name="date_of_birth"
+                        max="{{ now()->toDateString() }}"
                         style="width: 100%; padding: 0.75rem; border: 1px solid #d1d5db; border-radius: 0.375rem;"
-                        value="{{ old('age') }}"
-                        min="0"
+                        value="{{ old('date_of_birth') }}"
                         required
                     >
-                    @error('age')
+                    @error('date_of_birth')
                         <p style="color: var(--color-emergency); font-size: 0.875rem; margin-top: 0.25rem;">{{ $message }}</p>
                     @enderror
                 </div>

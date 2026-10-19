@@ -35,4 +35,8 @@ return [
         ],
     ],
 
+    'ai_pet_care' => [
+        'url' => env('AI_PET_CARE_URL', 'http://127.0.0.1:8001'),
+    ],
+
 ];

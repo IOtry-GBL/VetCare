@@ -7,7 +7,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 
 uses(RefreshDatabase::class);
 
-test('staff pending appointments route reuses the queue view', function () {
+test('staff pending appointments route reuses the queue view and classifies other reasons', function () {
     $staff = User::factory()->create([
         'role' => 'Staff',
     ]);
@@ -38,6 +38,10 @@ test('staff pending appointments route reuses the queue view', function () {
     $response->assertOk()
         ->assertViewIs('staff.queue')
         ->assertSee('Peanut')
+        ->assertSee('class="queue-row" data-type="other"', false)
+        ->assertSee('class="queue-table-shell"', false)
+        ->assertSee('max-width: 768px')
+        ->assertSee('flex: 1 1 calc(50% - 0.5rem)')
         ->assertViewHas('pendingAppointments', function ($pendingAppointments) use ($appointment) {
             return $pendingAppointments->pluck('appointment_id')->contains($appointment->appointment_id);
         });
