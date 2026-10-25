@@ -20,9 +20,9 @@ class UpdateMissedAppointments extends Command
         $missedAppointments = Appointment::where('status', 'Approved')
             ->get()
             ->filter(function ($appointment) use ($now) {
-                $appointmentDateTime = Carbon::createFromFormat('Y-m-d H:i', 
-                    $appointment->appointment_date . ' ' . $appointment->appointment_time
-                );
+                $date = substr((string) $appointment->getRawOriginal('appointment_date'), 0, 10);
+                $time = substr((string) $appointment->getRawOriginal('appointment_time'), 0, 5);
+                $appointmentDateTime = Carbon::createFromFormat('Y-m-d H:i', $date . ' ' . $time);
                 
                 // If current time is past appointment time and attendance is false/null
                 return $now->greaterThan($appointmentDateTime) && 
