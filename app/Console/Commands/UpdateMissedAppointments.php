@@ -33,7 +33,7 @@ class UpdateMissedAppointments extends Command
             $appointment->update(['status' => 'Missed']);
             
             // Dispatch event to send notification
-            event(new AppointmentMissed($appointment));
+            if (class_exists(AppointmentMissed::class)) { event(new AppointmentMissed($appointment)); }
         }
 
         $this->info("Updated {$missedAppointments->count()} appointments to Missed status.");
