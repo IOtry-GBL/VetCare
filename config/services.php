@@ -39,4 +39,9 @@ return [
         'url' => env('AI_PET_CARE_URL', 'http://127.0.0.1:8001'),
     ],
 
+    'groq' => [
+        'key' => env('GROQ_API_KEY'),
+        'model' => env('GROQ_MODEL'),
+    ],
+
 ];
