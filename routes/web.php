@@ -140,6 +140,8 @@ Route::middleware('auth')->group(function () {
         Route::get('/appointments', [VeterinarianController::class, 'appointments'])->name('appointments');
         Route::get('/appointments/create', [VeterinarianController::class, 'createAppointment'])->name('appointments.create');
         Route::post('/appointments', [VeterinarianController::class, 'storeAppointment'])->name('appointments.store');
+        Route::get('/appointments/{appointment}/confirm', [StaffController::class, 'confirmAppointment'])->name('appointments.confirm');
+        Route::post('/appointments/{appointment}/approve', [StaffController::class, 'approveAppointment'])->name('appointments.approve');
         Route::get('/appointments/{appointment}/session', [VeterinarianController::class, 'showAppointmentSession'])->name('appointments.session');
         Route::post('/appointments/{appointment}/session', [VeterinarianController::class, 'storeAppointmentSession'])->name('appointments.session.store');
         Route::post('/appointments/{appointment}/dna', [VeterinarianController::class, 'markAppointmentDidNotArrive'])->name('appointments.dna');
@@ -147,6 +149,7 @@ Route::middleware('auth')->group(function () {
         Route::get('/medical-records/{record}', [VeterinarianController::class, 'medicalRecordDetails'])->name('medical-records.details');
         Route::get('/prescriptions', [VeterinarianController::class, 'prescriptions'])->name('prescriptions');
         Route::post('/prescriptions', [VeterinarianController::class, 'storePrescription'])->name('prescriptions.store');
+        Route::patch('/prescriptions/{prescription}', [VeterinarianController::class, 'updatePrescription'])->name('prescriptions.update');
         Route::get('/adherence-monitoring', [VeterinarianController::class, 'adherenceMonitoring'])->name('adherence-monitoring');
         Route::post('/adherence/{prescription}/update', [VeterinarianController::class, 'updateAdherence'])->name('adherence.update');
     });

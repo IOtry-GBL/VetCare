@@ -178,6 +178,7 @@ class VeterinarianController extends Controller
         $record->load([
             'pet.owner',
             'consultation.veterinarian',
+            'consultation.appointment',
             'prescriptions' => fn ($query) => $query->with([
                 'adherenceLogs' => fn ($adherenceQuery) => $adherenceQuery->orderByDesc('scheduled_datetime'),
             ])->orderByDesc('issued_at'),
@@ -204,6 +205,18 @@ class VeterinarianController extends Controller
             $selectedRecord = $medicalRecords->first();
         }
 
+        $editingPrescription = null;
+        $editingFrequency = null;
+        $editingDuration = null;
+        if ($request->filled('edit')) {
+            abort_if(!$selectedRecord, 404);
+            $editingPrescription = EPrescription::where('prescription_id', (int) $request->query('edit'))
+                ->where('record_id', $selectedRecord->record_id)
+                ->firstOrFail();
+            $editingFrequency = AdherenceService::frequencyDetailsFromValue($editingPrescription->frequency);
+            $editingDuration = AdherenceService::durationDetailsFromValue($editingPrescription->duration);
+        }
+
         $prescriptions = EPrescription::with('medicalRecord.pet.owner')
             ->orderByDesc('issued_at')
             ->get();
@@ -211,7 +224,16 @@ class VeterinarianController extends Controller
         $patientCount = $medicalRecords->pluck('pet_id')->unique()->count();
         $issuedTodayCount = $prescriptions->filter(fn (EPrescription $prescription) => $prescription->issued_at?->isToday())->count();
 
-        return view('veterinarian.prescriptions', compact('medicalRecords', 'selectedRecord', 'prescriptions', 'patientCount', 'issuedTodayCount'));
+        return view('veterinarian.prescriptions', compact(
+            'medicalRecords',
+            'selectedRecord',
+            'prescriptions',
+            'patientCount',
+            'issuedTodayCount',
+            'editingPrescription',
+            'editingFrequency',
+            'editingDuration'
+        ));
     }
 
     /**
@@ -219,22 +241,7 @@ class VeterinarianController extends Controller
      */
     public function storePrescription(Request $request)
     {
-        $validator = Validator::make($request->all(), [
-            'record_id' => 'required|exists:medical_records,record_id',
-            'medication_name' => 'required|string|max:100',
-            'dosage' => 'required|string|max:50',
-            'frequency' => 'required|string|max:50',
-            'duration' => 'required|string|max:50',
-        ]);
-
-        $validator->after(function ($validator) use ($request) {
-            $this->validatePrescriptionTimingInputs($validator, [
-                'frequency' => $request->input('frequency'),
-                'duration' => $request->input('duration'),
-            ]);
-        });
-
-        $validated = $validator->validate();
+        $validated = $this->validatedPrescriptionData($request);
 
         $medicalRecord = MedicalRecord::findOrFail($validated['record_id']);
 
@@ -242,6 +249,87 @@ class VeterinarianController extends Controller
 
         return redirect()->route('vet.prescriptions', ['record' => $medicalRecord->record_id])
             ->with('success', 'E-prescription created successfully.');
+    }
+
+    public function updatePrescription(Request $request, EPrescription $prescription)
+    {
+        $validated = $this->validatedPrescriptionData($request);
+        abort_unless((int) $validated['record_id'] === (int) $prescription->record_id, 404);
+
+        DB::transaction(function () use ($validated, $prescription) {
+            $prescription->update([
+                'medication_name' => trim($validated['medication_name']),
+                'dosage' => trim($validated['dosage']),
+                'frequency' => AdherenceService::normalizeFrequency($validated['frequency']),
+                'duration' => AdherenceService::normalizeDuration($validated['duration']),
+            ]);
+
+            $prescription->adherenceLogs()
+                ->where('intake_status', 'Pending')
+                ->where('scheduled_datetime', '>', now()->utc())
+                ->delete();
+
+            $prescription = $prescription->fresh();
+            $futureSchedule = collect(AdherenceService::buildDoseSchedule(
+                $prescription->frequency,
+                $prescription->duration,
+                $prescription->issued_at
+            ))
+                ->filter(fn ($scheduledTime) => $scheduledTime->greaterThanOrEqualTo(now()->utc()))
+                ->all();
+
+            AdherenceService::createRemindersForPrescription($prescription, $futureSchedule);
+        });
+
+        return redirect()->route('vet.prescriptions', ['record' => $prescription->record_id])
+            ->with('success', 'E-prescription updated successfully.');
+    }
+
+    private function validatedPrescriptionData(Request $request): array
+    {
+        if ($request->exists('frequency_amount')) {
+            $request->merge([
+                'frequency' => $this->frequencyValue(
+                    $request->input('frequency_amount'),
+                    $request->input('frequency_unit', 'day')
+                ),
+            ]);
+        }
+        if ($request->exists('duration_amount')) {
+            $request->merge([
+                'duration' => $this->durationValue(
+                    $request->input('duration_amount'),
+                    $request->input('duration_unit', 'day')
+                ),
+            ]);
+        }
+
+        $validator = Validator::make($request->all(), [
+            'record_id' => 'required|exists:medical_records,record_id',
+            'medication_name' => 'required|string|max:100',
+            'dosage' => 'required|string|max:50',
+            'frequency' => 'required|string|max:50',
+            'frequency_amount' => 'nullable|integer|between:1,5',
+            'frequency_unit' => 'nullable|in:day,week,month',
+            'duration' => 'required|string|max:50',
+            'duration_amount' => 'nullable|integer|min:1|max:365',
+            'duration_unit' => 'nullable|in:day,week,month',
+        ]);
+
+        $validator->after(function ($validator) use ($request) {
+            $this->validatePrescriptionTimingInputs(
+                $validator,
+                [
+                    'frequency' => $request->input('frequency'),
+                    'duration' => $request->input('duration'),
+                ],
+                '',
+                $request->exists('frequency_amount') ? 'frequency_amount' : null,
+                $request->exists('duration_amount') ? 'duration_amount' : null
+            );
+        });
+
+        return $validator->validate();
     }
 
     /**
@@ -421,8 +509,27 @@ class VeterinarianController extends Controller
      */
     public function storeAppointmentSession(Request $request, Appointment $appointment)
     {
+        $prescriptions = $request->input('prescriptions');
+        if (is_array($prescriptions)) {
+            foreach ($prescriptions as $index => $prescription) {
+                if (is_array($prescription) && array_key_exists('frequency_amount', $prescription)) {
+                    $prescriptions[$index]['frequency'] = $this->frequencyValue(
+                        $prescription['frequency_amount'],
+                        $prescription['frequency_unit'] ?? 'day'
+                    );
+                }
+                if (is_array($prescription) && array_key_exists('duration_amount', $prescription)) {
+                    $prescriptions[$index]['duration'] = $this->durationValue(
+                        $prescription['duration_amount'],
+                        $prescription['duration_unit'] ?? 'day'
+                    );
+                }
+            }
+            $request->merge(['prescriptions' => $prescriptions]);
+        }
+
         if (
-            !$request->has('prescriptions')
+            !$request->exists('prescriptions')
             && $request->hasAny(['medication_name', 'dosage', 'frequency', 'duration'])
         ) {
             $request->merge([
@@ -448,6 +555,8 @@ class VeterinarianController extends Controller
 
         $validator = Validator::make($request->all(), [
             'diagnosis' => 'nullable|string|max:2000',
+            'chief_complaint' => 'nullable|string|max:2000',
+            'additional_reason_for_visit' => 'nullable|string|max:2000',
             'consultation_notes' => 'nullable|string|max:5000',
             'treatment_plan' => 'required|string|max:5000',
             'vaccination_notes' => 'nullable|string|max:2000',
@@ -461,11 +570,24 @@ class VeterinarianController extends Controller
             'prescriptions.*.medication_name' => 'nullable|string|max:100',
             'prescriptions.*.dosage' => 'nullable|string|max:50',
             'prescriptions.*.frequency' => 'nullable|string|max:100',
+            'prescriptions.*.frequency_amount' => 'nullable|integer|between:1,5',
+            'prescriptions.*.frequency_unit' => 'nullable|in:day,week,month',
             'prescriptions.*.duration' => 'nullable|string|max:50',
+            'prescriptions.*.duration_amount' => 'nullable|integer|min:1|max:365',
+            'prescriptions.*.duration_unit' => 'nullable|in:day,week,month',
         ]);
 
         $validator->after(function ($validator) use ($request) {
-            foreach (($request->input('prescriptions') ?? []) as $index => $prescription) {
+            $prescriptions = $request->input('prescriptions');
+            if (!is_array($prescriptions)) {
+                return;
+            }
+
+            foreach ($prescriptions as $index => $prescription) {
+                if (!is_array($prescription)) {
+                    continue;
+                }
+
                 $normalized = collect([
                     'medication_name' => trim((string) ($prescription['medication_name'] ?? '')),
                     'dosage' => trim((string) ($prescription['dosage'] ?? '')),
@@ -489,7 +611,13 @@ class VeterinarianController extends Controller
                 }
 
                 if ($filledFields->isNotEmpty()) {
-                    $this->validatePrescriptionTimingInputs($validator, $normalized->all(), "prescriptions.$index");
+                    $this->validatePrescriptionTimingInputs(
+                        $validator,
+                        $normalized->all(),
+                        "prescriptions.$index",
+                        array_key_exists('frequency_amount', $prescription) ? 'frequency_amount' : null,
+                        array_key_exists('duration_amount', $prescription) ? 'duration_amount' : null
+                    );
                 }
             }
         });
@@ -501,6 +629,8 @@ class VeterinarianController extends Controller
             $consultation = $this->resolveAppointmentConsultation($appointment);
 
             $consultation->update([
+                'chief_complaint' => $validated['chief_complaint'] ?? $consultation->chief_complaint,
+                'additional_reason_for_visit' => $validated['additional_reason_for_visit'] ?? null,
                 'consultation_notes' => $validated['consultation_notes'] ?? null,
                 'consultation_date' => $consultation->consultation_date ?? $appointment->appointment_date ?? now(),
                 'status' => 'Completed',
@@ -618,18 +748,48 @@ class VeterinarianController extends Controller
         ]);
     }
 
-    private function validatePrescriptionTimingInputs($validator, array $prescription, string $prefix = ''): void
+    private function validatePrescriptionTimingInputs(
+        $validator,
+        array $prescription,
+        string $prefix = '',
+        ?string $frequencyField = null,
+        ?string $durationField = null
+    ): void
     {
-        $frequencyKey = $prefix !== '' ? "{$prefix}.frequency" : 'frequency';
-        $durationKey = $prefix !== '' ? "{$prefix}.duration" : 'duration';
+        $frequencyKey = $prefix !== ''
+            ? "{$prefix}." . ($frequencyField ?? 'frequency')
+            : ($frequencyField ?? 'frequency');
+        $durationKey = $prefix !== ''
+            ? "{$prefix}." . ($durationField ?? 'duration')
+            : ($durationField ?? 'duration');
 
-        if (AdherenceService::frequencyPerDayFromValue($prescription['frequency'] ?? null) === null) {
-            $validator->errors()->add($frequencyKey, 'Frequency must be a number from 1 to 5 doses per day.');
+        if (AdherenceService::frequencyDetailsFromValue($prescription['frequency'] ?? null) === null) {
+            $validator->errors()->add($frequencyKey, 'Frequency must be from 1 to 5 doses per selected period.');
         }
 
         if (AdherenceService::durationDaysFromValue($prescription['duration'] ?? null) === null) {
-            $validator->errors()->add($durationKey, 'Duration must include a valid number of days.');
+            $validator->errors()->add($durationKey, 'Duration must be between 1 and 365 days, weeks, or months.');
         }
+    }
+
+    private function frequencyValue(mixed $amount, mixed $unit): string
+    {
+        $amount = trim((string) $amount);
+        $unit = trim((string) $unit);
+
+        return $amount !== '' && in_array($unit, ['day', 'week', 'month'], true)
+            ? "{$amount} per {$unit}"
+            : $amount;
+    }
+
+    private function durationValue(mixed $amount, mixed $unit): string
+    {
+        $amount = trim((string) $amount);
+        $unit = trim((string) $unit);
+
+        return $amount !== '' && in_array($unit, ['day', 'week', 'month'], true)
+            ? "{$amount} {$unit}"
+            : $amount;
     }
 
     private function issuePrescription(MedicalRecord $medicalRecord, array $prescription): EPrescription
@@ -643,7 +803,7 @@ class VeterinarianController extends Controller
             'dosage' => trim((string) $prescription['dosage']),
             'frequency' => $normalizedFrequency,
             'duration' => $normalizedDuration,
-            'issued_at' => now(),
+            'issued_at' => now()->utc(),
         ]);
 
         AdherenceService::createDoseScheduleForPrescription($issuedPrescription);

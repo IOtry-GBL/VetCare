@@ -133,7 +133,7 @@ class PetOwnerController extends Controller
             $availableSymptoms = $aiPetCareService->getAvailableSymptoms();
         } catch (\Illuminate\Http\Client\ConnectionException|\Illuminate\Http\Client\RequestException) {
             $availableSymptoms = [];
-            $symptomLoadError = 'The symptom list is unavailable right now. Start the AI service and try again.';
+            $symptomLoadError = 'The symptom list could not be loaded. Check that the symptom dataset is available and try again.';
         }
 
         return view('pet-owner.symptom-checker', [
@@ -162,7 +162,7 @@ class PetOwnerController extends Controller
                 'pets' => $pets,
                 'selectedPet' => $pet,
                 'guidance' => null,
-                'aiError' => 'The symptom list is unavailable right now. Start the AI service and try again.',
+                'aiError' => 'The symptom list could not be loaded. Check that the symptom dataset is available and try again.',
                 'availableSymptoms' => [],
                 'selectedSymptoms' => (array) $request->input('symptoms', []),
             ]);

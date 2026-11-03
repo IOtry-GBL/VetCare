@@ -18,6 +18,7 @@ class Consultation extends Model
         'appointment_id',
         'veterinarian_id',
         'chief_complaint',
+        'additional_reason_for_visit',
         'ai_guidance_summary',
         'consultation_notes',
         'consultation_date',

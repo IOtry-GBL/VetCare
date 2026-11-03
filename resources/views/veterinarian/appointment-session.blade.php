@@ -18,8 +18,10 @@
             [
                 'medication_name' => '',
                 'dosage' => '',
-                'frequency' => '',
-                'duration' => '',
+                'frequency_amount' => '',
+                'frequency_unit' => 'day',
+                'duration_amount' => '',
+                'duration_unit' => 'day',
             ],
         ]);
         $systemFamilyName = $owner?->name ?? 'Not on record';
@@ -166,6 +168,19 @@
                     </div>
 
                     <div class="intake-row compact-row intake-row--field intake-row--textarea">
+                        <div class="intake-label">Consultation Chief Complaint:</div>
+                        <div class="intake-value">{{ $consultation->chief_complaint ?? 'Not recorded' }}</div>
+                    </div>
+
+                    <div class="intake-row compact-row intake-row--field intake-row--textarea">
+                        <label class="intake-label" for="additional_reason_for_visit">Additional Reason for Visit:</label>
+                        <textarea id="additional_reason_for_visit" name="additional_reason_for_visit" class="field-control compact-field" placeholder="Add another concern raised during the visit.">{{ old('additional_reason_for_visit', $consultation->additional_reason_for_visit) }}</textarea>
+                        @error('additional_reason_for_visit')
+                            <p class="field-error">{{ $message }}</p>
+                        @enderror
+                    </div>
+
+                    <div class="intake-row compact-row intake-row--field intake-row--textarea">
                         <label class="intake-label" for="diagnosis">Diagnosis:</label>
                         <textarea id="diagnosis" name="diagnosis" class="field-control compact-field" placeholder="Document the diagnosis and clinical findings.">{{ old('diagnosis', $medicalRecord?->diagnosis) }}</textarea>
                         @error('diagnosis')
@@ -244,7 +259,7 @@
                     <h2>Optional Prescriptions</h2>
                     <p class="section-copy">Add one or more medications now if treatment should be issued immediately after the session.</p>
                     <p class="muted-copy" style="margin-top: 0.35rem; font-size: 0.88rem;">
-                        Frequency uses doses per day in Philippine time. Each scheduled dose stays confirmable for 3 hours.
+                        Set the number of doses per day, week, or month. Each scheduled dose stays confirmable for 3 hours.
                     </p>
                 </div>
                 <button type="button" class="btn btn-secondary" id="add-prescription-row">Add Another Prescription</button>
@@ -290,37 +305,68 @@
                             </div>
 
                             <div class="field">
-                                <label class="field-label" for="prescriptions_{{ $index }}_frequency">Frequency</label>
+                                <label class="field-label" for="prescriptions_{{ $index }}_frequency_amount">Frequency</label>
                                 <input
-                                    id="prescriptions_{{ $index }}_frequency"
-                                    name="prescriptions[{{ $index }}][frequency]"
-                                    data-prescription-field="frequency"
-                                    type="text"
-                                    list="prescription-frequency-options"
+                                    id="prescriptions_{{ $index }}_frequency_amount"
+                                    name="prescriptions[{{ $index }}][frequency_amount]"
+                                    data-prescription-field="frequency_amount"
+                                    type="number"
+                                    min="1"
+                                    max="5"
                                     inputmode="numeric"
                                     class="field-control"
                                     placeholder="1 to 5"
-                                    value="{{ $prescriptionDraft['frequency'] ?? '' }}">
-                                @error("prescriptions.$index.frequency")
+                                    value="{{ $prescriptionDraft['frequency_amount'] ?? '' }}">
+                                @error("prescriptions.$index.frequency_amount")
                                     <p class="field-error">{{ $message }}</p>
                                 @enderror
                             </div>
 
                             <div class="field">
-                                <label class="field-label" for="prescriptions_{{ $index }}_duration">Duration</label>
-                                <input
-                                    id="prescriptions_{{ $index }}_duration"
-                                    name="prescriptions[{{ $index }}][duration]"
-                                    data-prescription-field="duration"
-                                    type="text"
-                                    list="prescription-duration-options"
-                                    inputmode="numeric"
-                                    class="field-control"
-                                    placeholder="3"
-                                    value="{{ $prescriptionDraft['duration'] ?? '' }}">
-                                @error("prescriptions.$index.duration")
+                                <label class="field-label" for="prescriptions_{{ $index }}_frequency_unit">Frequency Unit</label>
+                                <select
+                                    id="prescriptions_{{ $index }}_frequency_unit"
+                                    name="prescriptions[{{ $index }}][frequency_unit]"
+                                    data-prescription-field="frequency_unit"
+                                    class="field-control">
+                                    <option value="day" {{ ($prescriptionDraft['frequency_unit'] ?? 'day') === 'day' ? 'selected' : '' }}>Day</option>
+                                    <option value="week" {{ ($prescriptionDraft['frequency_unit'] ?? 'day') === 'week' ? 'selected' : '' }}>Week</option>
+                                    <option value="month" {{ ($prescriptionDraft['frequency_unit'] ?? 'day') === 'month' ? 'selected' : '' }}>Month</option>
+                                </select>
+                                @error("prescriptions.$index.frequency_unit")
                                     <p class="field-error">{{ $message }}</p>
                                 @enderror
+                            </div>
+
+                            <div class="field">
+                                <label class="field-label" for="prescriptions_{{ $index }}_duration_amount">Duration</label>
+                                <input
+                                    id="prescriptions_{{ $index }}_duration_amount"
+                                    name="prescriptions[{{ $index }}][duration_amount]"
+                                    data-prescription-field="duration_amount"
+                                    type="number"
+                                    min="1"
+                                    max="365"
+                                    inputmode="numeric"
+                                    class="field-control"
+                                    placeholder="1 to 365"
+                                    value="{{ $prescriptionDraft['duration_amount'] ?? '' }}">
+                                @error("prescriptions.$index.duration_amount")
+                                    <p class="field-error">{{ $message }}</p>
+                                @enderror
+                            </div>
+
+                            <div class="field">
+                                <label class="field-label" for="prescriptions_{{ $index }}_duration_unit">Duration Unit</label>
+                                <select
+                                    id="prescriptions_{{ $index }}_duration_unit"
+                                    name="prescriptions[{{ $index }}][duration_unit]"
+                                    data-prescription-field="duration_unit"
+                                    class="field-control">
+                                    <option value="day" {{ ($prescriptionDraft['duration_unit'] ?? 'day') === 'day' ? 'selected' : '' }}>Day(s)</option>
+                                    <option value="week" {{ ($prescriptionDraft['duration_unit'] ?? 'day') === 'week' ? 'selected' : '' }}>Week(s)</option>
+                                    <option value="month" {{ ($prescriptionDraft['duration_unit'] ?? 'day') === 'month' ? 'selected' : '' }}>Month(s)</option>
+                                </select>
                             </div>
                         </div>
                     </div>
@@ -358,51 +404,61 @@
                         </div>
 
                         <div class="field">
-                            <label class="field-label" for="prescriptions___INDEX___frequency">Frequency</label>
+                            <label class="field-label" for="prescriptions___INDEX___frequency_amount">Frequency</label>
                             <input
-                                id="prescriptions___INDEX___frequency"
-                                name="prescriptions[__INDEX__][frequency]"
-                                data-prescription-field="frequency"
-                                type="text"
-                                list="prescription-frequency-options"
+                                id="prescriptions___INDEX___frequency_amount"
+                                name="prescriptions[__INDEX__][frequency_amount]"
+                                data-prescription-field="frequency_amount"
+                                type="number"
+                                min="1"
+                                max="5"
                                 inputmode="numeric"
                                 class="field-control"
                                 placeholder="1 to 5">
                         </div>
 
                         <div class="field">
-                            <label class="field-label" for="prescriptions___INDEX___duration">Duration</label>
+                            <label class="field-label" for="prescriptions___INDEX___frequency_unit">Frequency Unit</label>
+                            <select
+                                id="prescriptions___INDEX___frequency_unit"
+                                name="prescriptions[__INDEX__][frequency_unit]"
+                                data-prescription-field="frequency_unit"
+                                class="field-control">
+                                <option value="day">Day</option>
+                                <option value="week">Week</option>
+                                <option value="month">Month</option>
+                            </select>
+                        </div>
+
+                        <div class="field">
+                            <label class="field-label" for="prescriptions___INDEX___duration_amount">Duration</label>
                             <input
-                                id="prescriptions___INDEX___duration"
-                                name="prescriptions[__INDEX__][duration]"
-                                data-prescription-field="duration"
-                                type="text"
-                                list="prescription-duration-options"
+                                id="prescriptions___INDEX___duration_amount"
+                                name="prescriptions[__INDEX__][duration_amount]"
+                                data-prescription-field="duration_amount"
+                                type="number"
+                                min="1"
+                                max="365"
                                 inputmode="numeric"
                                 class="field-control"
-                                placeholder="3">
+                                placeholder="1 to 365">
+                        </div>
+
+                        <div class="field">
+                            <label class="field-label" for="prescriptions___INDEX___duration_unit">Duration Unit</label>
+                            <select
+                                id="prescriptions___INDEX___duration_unit"
+                                name="prescriptions[__INDEX__][duration_unit]"
+                                data-prescription-field="duration_unit"
+                                class="field-control">
+                                <option value="day">Day(s)</option>
+                                <option value="week">Week(s)</option>
+                                <option value="month">Month(s)</option>
+                            </select>
                         </div>
                     </div>
                 </div>
             </template>
-
-            <datalist id="prescription-frequency-options">
-                <option value="1" label="Once daily"></option>
-                <option value="2" label="Twice daily"></option>
-                <option value="3" label="3 times daily"></option>
-                <option value="4" label="4 times daily"></option>
-                <option value="5" label="5 times daily"></option>
-            </datalist>
-
-            <datalist id="prescription-duration-options">
-                <option value="1"></option>
-                <option value="3"></option>
-                <option value="5"></option>
-                <option value="7"></option>
-                <option value="10"></option>
-                <option value="14"></option>
-                <option value="30"></option>
-            </datalist>
 
             <div class="action-row">
                 <button type="submit" class="btn btn-primary">Save Session</button>

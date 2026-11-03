@@ -229,12 +229,21 @@ class StaffController extends Controller
      */
     public function confirmAppointment($id)
     {
-        $appointment = Appointment::findOrFail($id);
+        $appointment = $this->appointmentForCurrentRole($id);
         $vets = User::where('role', 'Veterinarian')->get();
         $calendarBookings = AppointmentScheduleService::calendarBookings();
         $calendarSlots = AppointmentScheduleService::timeSlots();
+        $isVeterinarian = request()->routeIs('vet.*');
+        $currentVetId = $isVeterinarian ? request()->user()->user_id : null;
 
-        return view('staff.confirm-appointment', compact('appointment', 'vets', 'calendarBookings', 'calendarSlots'));
+        return view('staff.confirm-appointment', compact(
+            'appointment',
+            'vets',
+            'calendarBookings',
+            'calendarSlots',
+            'isVeterinarian',
+            'currentVetId'
+        ));
     }
 
     /**
@@ -339,7 +348,11 @@ class StaffController extends Controller
      */
     public function approveAppointment(Request $request, $id)
     {
-        $appointment = Appointment::with('pet.owner')->findOrFail($id);
+        $appointment = $this->appointmentForCurrentRole($id)->load('pet.owner');
+
+        if ($request->routeIs('vet.*')) {
+            $request->merge(['vet_id' => $request->user()->user_id]);
+        }
 
         AppointmentScheduleService::normalizeDateTimeInput($request);
 
@@ -416,7 +429,25 @@ class StaffController extends Controller
             }
         }
 
-        return redirect()->route('staff.appointments.pending')->with('success', 'Appointment confirmed!');
+        $destination = $request->routeIs('vet.*') ? 'vet.appointments' : 'staff.appointments.pending';
+
+        return redirect()->route($destination)->with('success', 'Appointment confirmed!');
+    }
+
+    private function appointmentForCurrentRole($id): Appointment
+    {
+        $query = Appointment::query();
+
+        if (request()->routeIs('vet.*')) {
+            $vetId = request()->user()->user_id;
+            $query->where(function ($query) use ($vetId) {
+                $query->whereHas('consultation', function ($consultationQuery) use ($vetId) {
+                    $consultationQuery->where('veterinarian_id', $vetId);
+                })->orWhereDoesntHave('consultation');
+            });
+        }
+
+        return $query->findOrFail($id);
     }
 
     /**

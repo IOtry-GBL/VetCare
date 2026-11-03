@@ -42,6 +42,15 @@ class AdherenceService
 
     public static function frequencyPerDayFromValue(?string $value): ?int
     {
+        $frequency = self::frequencyDetailsFromValue($value);
+
+        return $frequency !== null && $frequency['unit'] === 'day'
+            ? $frequency['amount']
+            : null;
+    }
+
+    public static function frequencyDetailsFromValue(?string $value): ?array
+    {
         $normalized = Str::of((string) $value)
             ->lower()
             ->replace(['-', '/', '_'], ' ')
@@ -52,8 +61,20 @@ class AdherenceService
             return null;
         }
 
+        $unit = 'day';
+        foreach ([
+            'month' => '/\b(?:months?|monthly)\b/',
+            'week' => '/\b(?:weeks?|weekly)\b/',
+            'day' => '/\b(?:days?|daily)\b/',
+        ] as $candidate => $pattern) {
+            if (preg_match($pattern, $normalized) === 1) {
+                $unit = $candidate;
+                break;
+            }
+        }
+
         if (preg_match('/\b([1-5])(?:\s*x)?\b/', $normalized, $matches) === 1) {
-            return (int) $matches[1];
+            return ['amount' => (int) $matches[1], 'unit' => $unit];
         }
 
         $wordMap = [
@@ -72,14 +93,14 @@ class AdherenceService
 
         foreach ($wordMap as $needle => $frequency) {
             if (preg_match('/\b' . preg_quote($needle, '/') . '\b/', $normalized) === 1) {
-                return $frequency;
+                return ['amount' => $frequency, 'unit' => $unit];
             }
         }
 
         return null;
     }
 
-    public static function durationDaysFromValue(?string $value): ?int
+    public static function durationDetailsFromValue(?string $value): ?array
     {
         $normalized = Str::of((string) $value)
             ->lower()
@@ -91,10 +112,24 @@ class AdherenceService
             return null;
         }
 
-        if (preg_match('/\b(\d{1,3})\b/', $normalized, $matches) === 1) {
-            $days = (int) $matches[1];
+        $unit = 'day';
+        foreach ([
+            'month' => '/\b(?:months?|monthly)\b/',
+            'week' => '/\b(?:weeks?|weekly)\b/',
+            'day' => '/\b(?:days?|daily)\b/',
+        ] as $candidate => $pattern) {
+            if (preg_match($pattern, $normalized) === 1) {
+                $unit = $candidate;
+                break;
+            }
+        }
 
-            return $days >= 1 && $days <= 365 ? $days : null;
+        if (preg_match('/\b(\d{1,3})\b/', $normalized, $matches) === 1) {
+            $amount = (int) $matches[1];
+
+            return self::durationDaysFor($amount, $unit) <= 365
+                ? ['amount' => $amount, 'unit' => $unit]
+                : null;
         }
 
         $wordMap = [
@@ -109,72 +144,150 @@ class AdherenceService
             'thirty' => 30,
         ];
 
-        foreach ($wordMap as $needle => $days) {
+        foreach ($wordMap as $needle => $amount) {
             if (preg_match('/\b' . preg_quote($needle, '/') . '\b/', $normalized) === 1) {
-                return $days;
+                return ['amount' => $amount, 'unit' => $unit];
             }
         }
 
         return null;
     }
 
+    public static function durationDaysFromValue(?string $value): ?int
+    {
+        $duration = self::durationDetailsFromValue($value);
+
+        if ($duration === null) {
+            return null;
+        }
+
+        $days = self::durationDaysFor($duration['amount'], $duration['unit']);
+
+        return $days >= 1 && $days <= 365 ? $days : null;
+    }
+
     public static function normalizeFrequency(?string $value): ?string
     {
-        return match (self::frequencyPerDayFromValue($value)) {
-            1 => 'Once daily',
-            2 => 'Twice daily',
-            3 => '3 times daily',
-            4 => '4 times daily',
-            5 => '5 times daily',
-            default => null,
-        };
+        $frequency = self::frequencyDetailsFromValue($value);
+
+        if ($frequency === null) {
+            return null;
+        }
+
+        if ($frequency['unit'] === 'day') {
+            return match ($frequency['amount']) {
+                1 => 'Once daily',
+                2 => 'Twice daily',
+                default => "{$frequency['amount']} times daily",
+            };
+        }
+
+        $unit = $frequency['unit'];
+        $doseLabel = $frequency['amount'] === 1 ? 'time' : 'times';
+
+        return "{$frequency['amount']} {$doseLabel} per {$unit}";
     }
 
     public static function normalizeDuration(?string $value): ?string
     {
-        $days = self::durationDaysFromValue($value);
-
-        if ($days === null) {
+        $duration = self::durationDetailsFromValue($value);
+        if ($duration === null || self::durationDaysFromValue($value) === null) {
             return null;
         }
 
-        return $days === 1 ? '1 day' : "{$days} days";
+        $unit = $duration['unit'];
+        $label = $duration['amount'] === 1 ? $unit : "{$unit}s";
+
+        return "{$duration['amount']} {$label}";
     }
 
     public static function buildDoseSchedule(?string $frequencyValue, ?string $durationValue, ?Carbon $issuedAt = null): array
     {
-        $frequency = self::frequencyPerDayFromValue($frequencyValue);
+        $frequency = self::frequencyDetailsFromValue($frequencyValue);
+        $duration = self::durationDetailsFromValue($durationValue);
         $durationDays = self::durationDaysFromValue($durationValue);
 
-        if ($frequency === null || $durationDays === null) {
+        if ($frequency === null || $duration === null || $durationDays === null) {
             return [];
         }
 
         $issuedAtLocal = ($issuedAt ? $issuedAt->copy() : now())->timezone(self::clinicTimezone());
-        $scheduleTemplate = self::DAILY_SCHEDULES[$frequency] ?? self::DAILY_SCHEDULES[1];
-        $totalDoses = $frequency * $durationDays;
+        $windowEnd = self::durationEnd($issuedAtLocal, $duration);
+        if ($frequency['unit'] === 'day') {
+            $scheduleTemplate = self::DAILY_SCHEDULES[$frequency['amount']];
+            $dailyDoseTarget = $frequency['amount'] * $durationDays;
+            $scheduledTimes = [];
+            $cursorDate = $issuedAtLocal->copy()->startOfDay();
+
+            while (count($scheduledTimes) < $dailyDoseTarget) {
+                foreach ($scheduleTemplate as $time) {
+                    $scheduledLocal = $cursorDate->copy()->setTimeFromTimeString($time);
+
+                    if ($scheduledLocal->lt($issuedAtLocal)) {
+                        continue;
+                    }
+
+                    $scheduledTimes[] = $scheduledLocal->copy()->utc();
+
+                    if ($dailyDoseTarget !== null && count($scheduledTimes) === $dailyDoseTarget) {
+                        break;
+                    }
+                }
+
+                $cursorDate->addDay();
+            }
+
+            return $scheduledTimes;
+        }
+
+        $periodStart = $issuedAtLocal->copy()->startOfDay();
         $scheduledTimes = [];
-        $cursorDate = $issuedAtLocal->copy()->startOfDay();
 
-        while (count($scheduledTimes) < $totalDoses) {
-            foreach ($scheduleTemplate as $time) {
-                $scheduledLocal = $cursorDate->copy()->setTimeFromTimeString($time);
+        while ($periodStart->lt($windowEnd)) {
+            $periodEnd = $frequency['unit'] === 'week'
+                ? $periodStart->copy()->addWeek()
+                : $periodStart->copy()->addMonthNoOverflow();
+            $periodDays = (int) $periodStart->diffInDays($periodEnd);
 
-                if ($scheduledLocal->lt($issuedAtLocal)) {
+            for ($dose = 0; $dose < $frequency['amount']; $dose++) {
+                $dayOffset = (int) floor($dose * $periodDays / $frequency['amount']);
+                $scheduledLocal = $periodStart->copy()->addDays($dayOffset)->setTime(6, 0);
+
+                if ($scheduledLocal->lt($issuedAtLocal) && $periodStart->equalTo($issuedAtLocal->copy()->startOfDay())) {
+                    $scheduledLocal = $issuedAtLocal->copy();
+                }
+
+                if ($scheduledLocal->lt($issuedAtLocal) || $scheduledLocal->gte($windowEnd)) {
                     continue;
                 }
 
                 $scheduledTimes[] = $scheduledLocal->copy()->utc();
-
-                if (count($scheduledTimes) === $totalDoses) {
-                    break;
-                }
             }
 
-            $cursorDate->addDay();
+            $periodStart = $periodEnd;
         }
 
         return $scheduledTimes;
+    }
+
+    private static function durationDaysFor(int $amount, string $unit): int
+    {
+        return match ($unit) {
+            'week' => $amount * 7,
+            'month' => $amount * 30,
+            default => $amount,
+        };
+    }
+
+    private static function durationEnd(Carbon $issuedAt, array $duration): Carbon
+    {
+        $start = $issuedAt->copy()->startOfDay();
+
+        return match ($duration['unit']) {
+            'week' => $start->addWeeks($duration['amount']),
+            'month' => $start->addMonthsNoOverflow($duration['amount']),
+            default => $start->addDays($duration['amount']),
+        };
     }
 
     public static function createDoseScheduleForPrescription(EPrescription $prescription): array

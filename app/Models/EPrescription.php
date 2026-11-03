@@ -78,10 +78,9 @@ class EPrescription extends Model
         return match($unit) {
             'day', 'days' => $endDate->addDays($number),
             'week', 'weeks' => $endDate->addWeeks($number),
-            'month', 'months' => $endDate->addMonths($number),
+            'month', 'months' => $endDate->addMonthsNoOverflow($number),
             'year', 'years' => $endDate->addYears($number),
             default => $endDate,
         };
     }
 }
-

@@ -1,6 +1,8 @@
 <?php
 
 use App\Models\Appointment;
+use App\Models\AdherenceLog;
+use App\Models\AdherenceNotification;
 use App\Models\Consultation;
 use App\Models\EPrescription;
 use App\Models\MedicalRecord;
@@ -94,6 +96,11 @@ test('veterinarian prescriptions page loads clinic-wide records and prescription
         ->assertViewIs('veterinarian.prescriptions')
         ->assertSee('Mochi')
         ->assertSee('Cetirizine')
+        ->assertSee(e(route('vet.prescriptions', [
+            'record' => $fixture['medicalRecord']->record_id,
+            'edit' => $fixture['prescription']->prescription_id,
+        ])), false)
+        ->assertSee('name="frequency_unit"', false)
         ->assertViewHas('selectedRecord', function (MedicalRecord $selectedRecord) use ($fixture) {
             return $selectedRecord->record_id === $fixture['medicalRecord']->record_id;
         })
@@ -109,6 +116,122 @@ test('veterinarian prescriptions page loads clinic-wide records and prescription
             return $prescriptionIds->contains($fixture['prescription']->prescription_id)
                 && $prescriptionIds->contains($otherFixture['prescription']->prescription_id);
         });
+});
+
+test('veterinarian can edit a prescription and reschedule pending future doses', function () {
+    $vet = User::factory()->create([
+        'role' => 'Veterinarian',
+    ]);
+
+    Carbon::setTestNow(Carbon::create(2026, 4, 19, 0, 30, 0, 'UTC'));
+
+    $fixture = makeVeterinarianPrescriptionFixture($vet);
+    $takenDose = AdherenceLog::create([
+        'prescription_id' => $fixture['prescription']->prescription_id,
+        'scheduled_datetime' => now()->subDay()->utc(),
+        'intake_status' => 'Taken',
+        'confirmation_time' => now()->subDay()->utc(),
+    ]);
+    $pendingDose = AdherenceLog::create([
+        'prescription_id' => $fixture['prescription']->prescription_id,
+        'scheduled_datetime' => now()->addDay()->utc(),
+        'confirmation_deadline' => now()->addDay()->addHours(3)->utc(),
+        'intake_status' => 'Pending',
+    ]);
+    $notification = AdherenceNotification::create([
+        'user_id' => $fixture['owner']->user_id,
+        'adherence_id' => $pendingDose->adherence_id,
+        'medication_name' => $fixture['prescription']->medication_name,
+        'dosage' => $fixture['prescription']->dosage,
+        'scheduled_at' => $pendingDose->scheduled_datetime,
+        'confirmation_deadline' => $pendingDose->confirmation_deadline,
+        'status' => 'Pending',
+    ]);
+
+    $editPage = $this->actingAs($vet)->get(route('vet.prescriptions', [
+        'record' => $fixture['medicalRecord']->record_id,
+        'edit' => $fixture['prescription']->prescription_id,
+    ]));
+
+    $editPage->assertOk()
+        ->assertSee('Edit Prescription: Amoxicillin')
+        ->assertSee('value="2"', false)
+        ->assertSee('value="7"', false)
+        ->assertSee('Update Prescription');
+
+    $response = $this->actingAs($vet)->patch(route('vet.prescriptions.update', [
+        'prescription' => $fixture['prescription']->prescription_id,
+        'record' => $fixture['medicalRecord']->record_id,
+        'edit' => $fixture['prescription']->prescription_id,
+    ]), [
+        'record_id' => $fixture['medicalRecord']->record_id,
+        'medication_name' => 'Updated Amoxicillin',
+        'dosage' => '500 mg',
+        'frequency_amount' => '1',
+        'frequency_unit' => 'week',
+        'duration_amount' => '2',
+        'duration_unit' => 'week',
+    ]);
+
+    $response->assertRedirect(route('vet.prescriptions', [
+        'record' => $fixture['medicalRecord']->record_id,
+    ]));
+
+    $fixture['prescription']->refresh();
+    expect($fixture['prescription']->medication_name)->toBe('Updated Amoxicillin')
+        ->and($fixture['prescription']->dosage)->toBe('500 mg')
+        ->and($fixture['prescription']->frequency)->toBe('1 time per week')
+        ->and($fixture['prescription']->duration)->toBe('2 weeks');
+
+    $this->assertDatabaseHas('adherence_logs', [
+        'adherence_id' => $takenDose->adherence_id,
+        'intake_status' => 'Taken',
+    ]);
+    $this->assertDatabaseMissing('adherence_logs', [
+        'adherence_id' => $pendingDose->adherence_id,
+    ]);
+    $this->assertDatabaseMissing('adherence_notifications', [
+        'notification_id' => $notification->notification_id,
+    ]);
+    expect($fixture['prescription']->adherenceLogs()->where('intake_status', 'Pending')->count())->toBe(2);
+
+    Carbon::setTestNow();
+});
+
+test('veterinarian can create a prescription with a monthly frequency', function () {
+    $vet = User::factory()->create([
+        'role' => 'Veterinarian',
+    ]);
+
+    $fixture = makeVeterinarianPrescriptionFixture($vet, [
+        'with_prescription' => false,
+    ]);
+
+    Carbon::setTestNow(Carbon::create(2026, 4, 19, 0, 30, 0, 'UTC'));
+
+    $response = $this->actingAs($vet)->post(route('vet.prescriptions.store'), [
+        'record_id' => $fixture['medicalRecord']->record_id,
+        'medication_name' => 'Monthly medication',
+        'dosage' => '1 tablet',
+        'frequency_amount' => '2',
+        'frequency_unit' => 'month',
+        'duration_amount' => '2',
+        'duration_unit' => 'month',
+    ]);
+
+    $response->assertRedirect(route('vet.prescriptions', [
+        'record' => $fixture['medicalRecord']->record_id,
+    ]));
+
+    $prescription = EPrescription::where('record_id', $fixture['medicalRecord']->record_id)
+        ->where('medication_name', 'Monthly medication')
+        ->firstOrFail();
+
+    expect($prescription->frequency)->toBe('2 times per month')
+        ->and($prescription->duration)->toBe('2 months')
+        ->and($prescription->adherenceLogs()->count())->toBe(4);
+
+    Carbon::setTestNow();
 });
 
 test('veterinarian can create an e-prescription from any clinic medical record', function () {

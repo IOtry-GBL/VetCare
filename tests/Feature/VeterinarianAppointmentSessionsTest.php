@@ -81,6 +81,7 @@ test('assigned veterinarian can complete an appointment session and save the rec
     $response = $this->actingAs($fixture['vet'])
         ->post(route('vet.appointments.session.store', $fixture['appointment']), [
             'chief_complaint' => 'Vomiting and poor appetite',
+            'additional_reason_for_visit' => 'Reduced water intake since yesterday.',
             'consultation_notes' => 'Hydration was started and the patient remained responsive.',
             'diagnosis' => 'Acute gastritis',
             'treatment_plan' => 'Provide antiemetic support and feed bland meals for three days.',
@@ -107,6 +108,7 @@ test('assigned veterinarian can complete an appointment session and save the rec
         'consultation_id' => $fixture['consultation']->consultation_id,
         'status' => 'Completed',
         'chief_complaint' => 'Vomiting and poor appetite',
+        'additional_reason_for_visit' => 'Reduced water intake since yesterday.',
     ]);
 
     $record = MedicalRecord::where('consultation_id', $fixture['consultation']->consultation_id)->first();
@@ -136,6 +138,53 @@ test('assigned veterinarian can complete an appointment session and save the rec
     $firstDose = $prescription->adherenceLogs()->orderBy('scheduled_datetime')->firstOrFail();
     expect($firstDose->scheduled_datetime->timezone('Asia/Manila')->format('Y-m-d H:i'))->toBe('2026-04-19 12:00');
     expect($firstDose->confirmation_deadline->timezone('Asia/Manila')->format('Y-m-d H:i'))->toBe('2026-04-19 15:00');
+
+    Carbon::setTestNow();
+});
+
+test('assigned veterinarian can prescribe doses per week and month', function () {
+    $fixture = makeVeterinarianSessionFixture();
+    Carbon::setTestNow(Carbon::create(2026, 4, 19, 0, 30, 0, 'UTC'));
+
+    $response = $this->actingAs($fixture['vet'])
+        ->post(route('vet.appointments.session.store', $fixture['appointment']), [
+            'treatment_plan' => 'Continue the prescribed medication.',
+            'prescriptions' => [
+                [
+                    'medication_name' => 'Weekly medication',
+                    'dosage' => '1 tablet',
+                    'frequency_amount' => '2',
+                    'frequency_unit' => 'week',
+                    'duration_amount' => '2',
+                    'duration_unit' => 'week',
+                ],
+                [
+                    'medication_name' => 'Monthly medication',
+                    'dosage' => '1 tablet',
+                    'frequency_amount' => '1',
+                    'frequency_unit' => 'month',
+                    'duration_amount' => '1',
+                    'duration_unit' => 'month',
+                ],
+            ],
+        ]);
+
+    $response->assertRedirect(route('vet.appointments.session', $fixture['appointment']));
+
+    $record = MedicalRecord::where('consultation_id', $fixture['consultation']->consultation_id)->firstOrFail();
+    $weeklyPrescription = EPrescription::where('record_id', $record->record_id)
+        ->where('medication_name', 'Weekly medication')
+        ->firstOrFail();
+    $monthlyPrescription = EPrescription::where('record_id', $record->record_id)
+        ->where('medication_name', 'Monthly medication')
+        ->firstOrFail();
+
+    expect($weeklyPrescription->frequency)->toBe('2 times per week')
+        ->and($weeklyPrescription->duration)->toBe('2 weeks')
+        ->and($weeklyPrescription->adherenceLogs()->count())->toBe(4)
+        ->and($monthlyPrescription->frequency)->toBe('1 time per month')
+        ->and($monthlyPrescription->duration)->toBe('1 month')
+        ->and($monthlyPrescription->adherenceLogs()->count())->toBe(1);
 
     Carbon::setTestNow();
 });

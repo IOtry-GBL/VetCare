@@ -74,7 +74,7 @@
 
     @if ($aiError)
         <div class="card" role="alert" style="border-left: 4px solid #b42318;">
-            <h2>Could not reach the AI service</h2>
+            <h2>Symptom checker unavailable</h2>
             <p>{{ $aiError }}</p>
         </div>
     @endif

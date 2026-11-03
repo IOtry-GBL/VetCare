@@ -23,9 +23,11 @@
         $fee = $medicalRecord->fee !== null ? '₱'.number_format($medicalRecord->fee, 2) : 'Not recorded';
     @endphp
 
-    <section class="hero-card"><div class="hero-row"><div><h1 class="hero-title">Record No. {{ $medicalRecord->record_id }}</h1><p class="hero-copy">Medical report for {{ $pet?->name ?? 'Unknown Pet' }}.</p></div><div class="action-row"><a href="{{ route('staff.medical-records') }}" class="btn btn-secondary">Back To Record List</a></div></div></section>
+    <section class="hero-card"><div class="hero-row"><div><h1 class="hero-title">Record No. {{ $medicalRecord->record_id }}</h1><p class="hero-copy">Medical report for {{ $pet?->name ?? 'Unknown Pet' }}.</p></div><div class="action-row"><button type="button" class="btn btn-primary screen-only" onclick="window.print()">Print Record</button><a href="{{ route('staff.medical-records') }}" class="btn btn-secondary screen-only">Back To Record List</a></div></div></section>
 
     <article class="card medical-report">
+        @include('components.medical-record-print-sheet', ['record' => $medicalRecord])
+
         <div class="report-section-title"><div><span class="eyebrow">Clinical Report</span><h3>{{ $appointment?->reason_for_visit ?: 'Medical record details' }}</h3></div><span class="report-stamp">Record #{{ $medicalRecord->record_id }}</span></div>
 
         <div class="clinical-layout">
@@ -40,6 +42,7 @@
                 <div class="label-row"><span>Food:</span><strong>{{ $medicalRecord->food ?: 'Not recorded' }}</strong></div>
                 <div class="label-row"><span>Environment:</span><strong>{{ $medicalRecord->environment ?: 'Not recorded' }}</strong></div>
                 <div class="label-row label-row--multi"><span>Reason for Visit:</span><strong>{{ $appointment?->reason_for_visit ?: 'Not recorded' }}</strong></div>
+                <div class="label-row label-row--multi"><span>Additional Reason for Visit:</span><strong>{{ $consultation?->additional_reason_for_visit ?: 'Not recorded' }}</strong></div>
                 <div class="label-row label-row--multi"><span>Diagnosis:</span><strong>{{ $medicalRecord->diagnosis ?: 'No diagnosis recorded.' }}</strong></div>
                 <div class="label-row label-row--multi"><span>Line of Treatment:</span><strong>{{ $medicalRecord->treatment_plan ?: 'No treatment plan recorded.' }}</strong></div>
                 <div class="label-row"><span>Attending Vet:</span><strong>{{ $veterinarian?->name ? 'Dr. '.$veterinarian->name : 'Not assigned' }}</strong></div>
@@ -73,7 +76,15 @@
 @endsection
 
 @section('styles')
+@include('components.print-sheet-styles')
 <style>
+@media print{.medical-report{margin:0!important;padding:0!important;border:0!important;box-shadow:none!important;background:#fff!important}}
 .medical-report{background:rgba(255,255,255,.94)}.report-section-title,.report-section-head{display:flex;align-items:center;justify-content:space-between;gap:1rem}.report-section-title{padding-bottom:1rem;margin-bottom:1rem;border-bottom:1px solid var(--shell-line)}.report-section-title h3{margin:.15rem 0 0;font-size:1.45rem;color:var(--shell-ink)}.report-stamp{display:inline-flex;align-items:center;min-height:34px;padding:.35rem .8rem;border-radius:999px;background:rgba(15,139,141,.12);color:var(--shell-accent-deep);font-size:.8rem;font-weight:700}.clinical-layout{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(240px,.85fr);gap:1.25rem;margin-top:.75rem}.clinical-panel{display:flex;flex-direction:column;gap:.5rem;padding:1rem 1.1rem;border:1px solid var(--shell-line);border-radius:var(--shell-radius-lg);background:rgba(248,250,252,.8)}.clinical-panel--secondary{background:linear-gradient(180deg,rgba(248,250,252,.9),rgba(255,255,255,.8))}.label-row{display:grid;grid-template-columns:minmax(120px,150px) minmax(0,1fr);gap:.85rem;align-items:flex-start;padding:.55rem 0;border-bottom:1px solid rgba(15,23,42,.06)}.label-row span{color:var(--shell-muted);font-size:.83rem;font-weight:600;line-height:1.5}.label-row strong{display:block;color:var(--shell-ink);font-size:.96rem;line-height:1.55;word-break:break-word}.label-row--multi{display:block}.label-row--multi span{display:block;margin-bottom:.35rem}.report-subsection{margin-top:1.5rem;padding-top:1.25rem;border-top:1px solid var(--shell-line)}.mini-table-wrap{overflow:auto;border:1px solid var(--shell-line);border-radius:var(--shell-radius-lg);margin-top:.9rem}.mini-table{width:100%;min-width:720px;border-collapse:collapse;font-size:.9rem}.mini-table th,.mini-table td{padding:1rem 1.05rem;border-bottom:1px solid rgba(23,49,61,.08);text-align:left;vertical-align:top}.mini-table th{background:#f8fafc;color:var(--shell-muted);font-size:.75rem;text-transform:uppercase}.pill-warning{background:rgba(183,121,31,.14);color:#8d5e12}@media(max-width:1100px){.clinical-layout{grid-template-columns:1fr}}@media(max-width:640px){.report-section-title,.report-section-head{align-items:flex-start;flex-direction:column}.label-row{grid-template-columns:1fr;gap:.15rem}}
 </style>
 @endsection
+
+@if (request()->boolean('print'))
+    <script>
+        window.addEventListener('load', () => window.print());
+    </script>
+@endif

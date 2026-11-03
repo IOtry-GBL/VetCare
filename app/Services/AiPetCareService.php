@@ -63,7 +63,7 @@ class AiPetCareService
 
     private function loadData(): array
     {
-        $path = storage_path('app/private/ai-data/combined_pet_symptom_dataset.csv');
+        $path = storage_path('app/ai-data/combined_pet_symptom_dataset.csv');
         $data = $this->readCsv($path);
         return [$data, $data];
     }

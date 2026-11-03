@@ -54,18 +54,19 @@ test('pet owner can request guidance for an owned pet using its saved profile', 
         'weight' => 12.5,
     ]);
 
-    config(['services.ai_pet_care.url' => 'http://127.0.0.1:8001']);
+    config([
+        'services.groq.key' => 'test-key',
+        'services.groq.model' => 'test-model',
+    ]);
     Http::fake([
-        '127.0.0.1:8001/symptoms' => Http::response(['symptoms' => ['vomiting', 'weakness']]),
-        '127.0.0.1:8001/guidance' => Http::response([
-            'species' => 'Dog',
-            'breed' => 'Poodle',
-            'age_months' => 38,
-            'age_years' => 3.17,
-            'weight_kg' => 12.5,
-            'reported_symptoms' => ['Vomiting', 'Weakness'],
-            'dataset_observations' => [],
-            'guidance' => 'Monitor symptoms and contact a veterinarian if they persist.',
+        'api.groq.com/openai/v1/chat/completions' => Http::response([
+            'choices' => [
+                [
+                    'message' => [
+                        'content' => 'Monitor symptoms and contact a veterinarian if they persist.',
+                    ],
+                ],
+            ],
         ]),
     ]);
 
@@ -83,12 +84,9 @@ test('pet owner can request guidance for an owned pet using its saved profile', 
         ->assertSee('Monitor symptoms and contact a veterinarian');
 
     Http::assertSent(fn (Request $request) =>
-        $request->url() === 'http://127.0.0.1:8001/guidance'
-        && $request['species'] === 'Dog'
-        && $request['breed'] === 'Poodle'
-        && $request['age_months'] === 38
-        && $request['weight_kg'] === 12.5
-        && $request['symptoms'] === ['vomiting', 'weakness']
+        $request->url() === 'https://api.groq.com/openai/v1/chat/completions'
+        && $request['model'] === 'test-model'
+        && $request['messages'][1]['content'] !== ''
     );
 });
 

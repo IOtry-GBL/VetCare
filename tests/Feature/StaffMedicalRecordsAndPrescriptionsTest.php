@@ -100,6 +100,9 @@ test('staff can view prescription details', function () {
 
     $response->assertOk()
         ->assertViewIs('staff.prescriptions.details')
+        ->assertSee('Print Prescription')
+        ->assertSee('PRESCRIPTION')
+        ->assertSee('print-sheet')
         ->assertSee('Cetirizine')
         ->assertSee('Seasonal dermatitis')
         ->assertSee('Taken');
@@ -125,6 +128,10 @@ test('staff can view medical record details', function () {
 
     $response->assertOk()
         ->assertViewIs('medical-records.staff-details')
+        ->assertSee('Print Record')
+        ->assertSee('medical-record-print-sheet')
+        ->assertSee('medical-record-patient-grid')
+        ->assertSee('Case / History')
         ->assertSee('Seasonal dermatitis')
         ->assertSee('Use medicated shampoo twice weekly.')
         ->assertSee('Cetirizine');

@@ -139,6 +139,9 @@
                             <p style="margin: 0.35rem 0 0 0; color: #6b7280;">
                                 {{ $appointment->appointment_date?->format('M j, Y g:i A') ?? 'N/A' }} | {{ $appointment->reason ?? 'No reason provided' }}
                             </p>
+                            <a href="{{ route('vet.appointments.confirm', $appointment) }}" class="btn btn-primary" style="display: inline-block; margin-top: 0.75rem;">
+                                Review &amp; Confirm
+                            </a>
                         </div>
                     @endforeach
                 </div>

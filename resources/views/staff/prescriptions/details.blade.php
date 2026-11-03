@@ -15,6 +15,60 @@
         $adherenceLogs = $prescription->adherenceLogs;
     @endphp
 
+    <section class="print-sheet">
+        @include('components.print-clinic-header')
+        <div class="print-document-heading">
+            <h2>PRESCRIPTION</h2>
+            <span>Issued {{ $prescription->issued_at?->format('M d, Y') ?? 'Date not recorded' }}</span>
+        </div>
+
+        <div class="print-patient-grid">
+            <div class="print-field"><span>Owner:</span><strong>{{ $owner?->name ?? 'Unknown Owner' }}</strong></div>
+            <div class="print-field"><span>Pet:</span><strong>{{ $pet?->name ?? 'Unknown Pet' }}</strong></div>
+            <div class="print-field"><span>Species:</span><strong>{{ $pet?->species ?? 'N/A' }}</strong></div>
+            <div class="print-field"><span>Breed:</span><strong>{{ $pet?->breed ?? 'N/A' }}</strong></div>
+            <div class="print-field"><span>Record No.:</span><strong>{{ $record?->record_id ?? 'N/A' }}</strong></div>
+            <div class="print-field"><span>Veterinarian:</span><strong>{{ $veterinarian?->name ? 'Dr. '.$veterinarian->name : 'Not assigned' }}</strong></div>
+        </div>
+
+        <div class="print-prescription-section">
+            <h3>Medication Instructions</h3>
+            <table>
+                <thead>
+                    <tr><th>Medication</th><th>Dosage</th><th>Frequency</th><th>Duration</th></tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>{{ $prescription->medication_name }}</td>
+                        <td>{{ $prescription->dosage }}</td>
+                        <td>{{ $prescription->frequency }}</td>
+                        <td>{{ $prescription->duration }}</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="print-narrative">
+            <div>
+                <h3>Diagnosis</h3>
+                <p>{{ $record?->diagnosis ?: 'Not recorded' }}</p>
+            </div>
+            <div>
+                <h3>Treatment Plan</h3>
+                <p>{{ $record?->treatment_plan ?: 'Not recorded' }}</p>
+            </div>
+            <div>
+                <h3>Follow-up</h3>
+                <p>{{ $record?->follow_up_date?->format('M d, Y') ?? 'Not scheduled' }}</p>
+            </div>
+        </div>
+
+        <div class="print-signature-row">
+            <span>Veterinarian signature: ___________________________________</span>
+            <span>Date: __________________</span>
+        </div>
+    </section>
+
     <section class="hero-card">
         <div class="hero-row">
             <div>
@@ -25,9 +79,10 @@
             </div>
 
             <div class="action-row">
-                <a href="{{ route('staff.prescriptions') }}" class="btn btn-secondary">Back To Prescriptions</a>
+                <button type="button" class="btn btn-primary screen-only" onclick="window.print()">Print Prescription</button>
+                <a href="{{ route('staff.prescriptions') }}" class="btn btn-secondary screen-only">Back To Prescriptions</a>
                 @if ($record)
-                    <a href="{{ route('staff.medical-records.details', $record->record_id) }}" class="btn btn-primary">Open Medical Record</a>
+                    <a href="{{ route('staff.medical-records.details', $record->record_id) }}" class="btn btn-primary screen-only">Open Medical Record</a>
                 @endif
             </div>
         </div>
@@ -151,6 +206,7 @@
 @endsection
 
 @section('styles')
+    @include('components.print-sheet-styles')
     <style>
         .details-grid {
             display: grid;
@@ -166,3 +222,9 @@
         }
     </style>
 @endsection
+
+@if (request()->boolean('print'))
+    <script>
+        window.addEventListener('load', () => window.print());
+    </script>
+@endif

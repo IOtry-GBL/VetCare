@@ -301,6 +301,11 @@
                                             </span>
 
                                         @endif
+                                        <a
+                                            href="{{ route('vet.prescriptions', ['record' => $selectedRecord->record_id, 'edit' => $prescription->prescription_id]) }}"
+                                            class="btn btn-secondary">
+                                            Edit
+                                        </a>
 
                                     </div>
 
@@ -354,19 +359,30 @@
 
                 </div>
 
-                {{-- ADD PRESCRIPTION --}}
+                {{-- ADD OR EDIT PRESCRIPTION --}}
                 <form
-                    action="{{ route('vet.prescriptions.store') }}"
+                    action="{{ $editingPrescription
+                        ? route('vet.prescriptions.update', ['prescription' => $editingPrescription->prescription_id, 'record' => $selectedRecord->record_id, 'edit' => $editingPrescription->prescription_id])
+                        : route('vet.prescriptions.store') }}"
                     method="POST"
                     class="stack"
                     style="margin-top:1.5rem;">
 
                     @csrf
+                    @if($editingPrescription)
+                        @method('PATCH')
+                    @endif
 
                     <input
                         type="hidden"
                         name="record_id"
                         value="{{ $selectedRecord->record_id }}">
+
+                    @if($editingPrescription)
+                        <h3>Edit Prescription: {{ $editingPrescription->medication_name }}</h3>
+                    @else
+                        <h3>Add Prescription</h3>
+                    @endif
 
                     <div class="form-grid">
 
@@ -381,7 +397,7 @@
                                 name="medication_name"
                                 class="field-control"
                                 placeholder="Amoxicillin"
-                                value="{{ old('medication_name') }}">
+                                value="{{ old('medication_name', $editingPrescription?->medication_name) }}">
 
                             @error('medication_name')
                                 <p class="field-error">{{ $message }}</p>
@@ -400,7 +416,7 @@
                                 name="dosage"
                                 class="field-control"
                                 placeholder="250mg"
-                                value="{{ old('dosage') }}">
+                                value="{{ old('dosage', $editingPrescription?->dosage) }}">
 
                             @error('dosage')
                                 <p class="field-error">{{ $message }}</p>
@@ -411,17 +427,38 @@
                         <div class="field">
 
                             <label class="field-label">
-                                Frequency
+                                Doses per
                             </label>
 
                             <input
-                                type="text"
-                                name="frequency"
+                                type="number"
+                                name="frequency_amount"
                                 class="field-control"
-                                placeholder="2x daily"
-                                value="{{ old('frequency') }}">
+                                min="1"
+                                max="5"
+                                inputmode="numeric"
+                                placeholder="1 to 5"
+                                value="{{ old('frequency_amount', $editingFrequency['amount'] ?? '') }}">
 
-                            @error('frequency')
+                            @error('frequency_amount')
+                                <p class="field-error">{{ $message }}</p>
+                            @enderror
+
+                        </div>
+
+                        <div class="field">
+
+                            <label class="field-label">
+                                Frequency Unit
+                            </label>
+
+                            <select name="frequency_unit" class="field-control">
+                                <option value="day" {{ old('frequency_unit', $editingFrequency['unit'] ?? 'day') === 'day' ? 'selected' : '' }}>Day</option>
+                                <option value="week" {{ old('frequency_unit', $editingFrequency['unit'] ?? 'day') === 'week' ? 'selected' : '' }}>Week</option>
+                                <option value="month" {{ old('frequency_unit', $editingFrequency['unit'] ?? 'day') === 'month' ? 'selected' : '' }}>Month</option>
+                            </select>
+
+                            @error('frequency_unit')
                                 <p class="field-error">{{ $message }}</p>
                             @enderror
 
@@ -434,13 +471,34 @@
                             </label>
 
                             <input
-                                type="text"
-                                name="duration"
+                                type="number"
+                                name="duration_amount"
                                 class="field-control"
-                                placeholder="7 days"
-                                value="{{ old('duration') }}">
+                                min="1"
+                                max="365"
+                                inputmode="numeric"
+                                placeholder="1 to 365"
+                                value="{{ old('duration_amount', $editingDuration['amount'] ?? '') }}">
 
-                            @error('duration')
+                            @error('duration_amount')
+                                <p class="field-error">{{ $message }}</p>
+                            @enderror
+
+                        </div>
+
+                        <div class="field">
+
+                            <label class="field-label">
+                                Duration Unit
+                            </label>
+
+                            <select name="duration_unit" class="field-control">
+                                <option value="day" {{ old('duration_unit', $editingDuration['unit'] ?? 'day') === 'day' ? 'selected' : '' }}>Day(s)</option>
+                                <option value="week" {{ old('duration_unit', $editingDuration['unit'] ?? 'day') === 'week' ? 'selected' : '' }}>Week(s)</option>
+                                <option value="month" {{ old('duration_unit', $editingDuration['unit'] ?? 'day') === 'month' ? 'selected' : '' }}>Month(s)</option>
+                            </select>
+
+                            @error('duration_unit')
                                 <p class="field-error">{{ $message }}</p>
                             @enderror
 
@@ -451,8 +509,14 @@
                     <div class="action-row">
 
                         <button type="submit" class="btn btn-primary">
-                            Add Prescription
+                            {{ $editingPrescription ? 'Update Prescription' : 'Add Prescription' }}
                         </button>
+
+                        @if($editingPrescription)
+                            <a href="{{ route('vet.prescriptions', ['record' => $selectedRecord->record_id]) }}" class="btn btn-secondary">
+                                Cancel
+                            </a>
+                        @endif
 
                     </div>
 

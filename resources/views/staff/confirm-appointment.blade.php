@@ -1,7 +1,15 @@
 @extends('layouts.app')
 
 @section('sidebar')
-    @include('staff.sidebar')
+    @if($isVeterinarian)
+        <a href="{{ route('vet.dashboard') }}" class="sidebar-item">Dashboard</a>
+        <a href="{{ route('vet.appointments') }}" class="sidebar-item active">Appointments</a>
+        <a href="{{ route('vet.medical-records') }}" class="sidebar-item">Medical Records</a>
+        <a href="{{ route('vet.prescriptions') }}" class="sidebar-item">E-Prescriptions</a>
+        <a href="{{ route('vet.adherence-monitoring') }}" class="sidebar-item">Medication Adherence</a>
+    @else
+        @include('staff.sidebar')
+    @endif
 @endsection
 
 @section('content')
@@ -45,14 +53,14 @@
 
         <div class="card">
             <h2 style="margin-top: 0;">Confirm & Adjust</h2>
-            <form action="{{ route('staff.appointments.approve', $appointment->id) }}" method="POST">
+            <form action="{{ route(($isVeterinarian ? 'vet' : 'staff') . '.appointments.approve', $appointment->id) }}" method="POST">
                 @csrf
 
                 <div style="margin-bottom: 1.5rem;">
                     <label style="display: block; margin-bottom: 0.5rem; font-weight: 500;">Appointment Date & Time *</label>
                     @include('components.appointment-calendar', [
-                        'calendarId' => 'staff-confirm-calendar',
-                        'viewer' => 'staff',
+                        'calendarId' => $isVeterinarian ? 'vet-confirm-calendar' : 'staff-confirm-calendar',
+                        'viewer' => $isVeterinarian ? 'vet' : 'staff',
                         'mode' => 'reschedule',
                         'bookings' => $calendarBookings,
                         'slots' => $calendarSlots,
@@ -69,27 +77,32 @@
                     @enderror
                 </div>
 
-                <div style="margin-bottom: 1.5rem;">
-                    <label for="vet_id" style="display: block; margin-bottom: 0.5rem; font-weight: 500;">Assign Veterinarian</label>
-                    <select 
-                        id="vet_id" 
-                        name="vet_id" 
-                        style="width: 100%; padding: 0.75rem; border: 1px solid #d1d5db; border-radius: 0.375rem;"
-                    >
-                        <option value="">-- Select Vet --</option>
-                        @foreach($vets as $vet)
-                            @php
-                                $currentVetId = $appointment->consultation ? $appointment->consultation->veterinarian_id : null;
-                            @endphp
-                            <option value="{{ $vet->id }}" {{ $currentVetId == $vet->id ? 'selected' : '' }}>
-                                Dr. {{ $vet->name }}
-                            </option>
-                        @endforeach
-                    </select>
-                    @error('vet_id')
-                        <p style="color: var(--color-emergency); font-size: 0.875rem; margin-top: 0.25rem;">{{ $message }}</p>
-                    @enderror
-                </div>
+                @if($isVeterinarian)
+                    <input type="hidden" name="vet_id" value="{{ $currentVetId }}">
+                    <p style="margin-bottom: 1.5rem;">This appointment will be assigned to you when confirmed.</p>
+                @else
+                    <div style="margin-bottom: 1.5rem;">
+                        <label for="vet_id" style="display: block; margin-bottom: 0.5rem; font-weight: 500;">Assign Veterinarian</label>
+                        <select
+                            id="vet_id"
+                            name="vet_id"
+                            style="width: 100%; padding: 0.75rem; border: 1px solid #d1d5db; border-radius: 0.375rem;"
+                        >
+                            <option value="">-- Select Vet --</option>
+                            @foreach($vets as $vet)
+                                @php
+                                    $currentVetId = $appointment->consultation ? $appointment->consultation->veterinarian_id : null;
+                                @endphp
+                                <option value="{{ $vet->id }}" {{ $currentVetId == $vet->id ? 'selected' : '' }}>
+                                    Dr. {{ $vet->name }}
+                                </option>
+                            @endforeach
+                        </select>
+                        @error('vet_id')
+                            <p style="color: var(--color-emergency); font-size: 0.875rem; margin-top: 0.25rem;">{{ $message }}</p>
+                        @enderror
+                    </div>
+                @endif
 
                 <div style="margin-bottom: 1.5rem;">
                     <label for="status" style="display: block; margin-bottom: 0.5rem; font-weight: 500;">Status *</label>
@@ -111,7 +124,7 @@
 
                 <div style="display: flex; gap: 1rem;">
                     <button type="submit" class="btn btn-primary">Confirm Appointment</button>
-                    <a href="{{ route('staff.appointments.pending') }}" class="btn btn-secondary">Cancel</a>
+                    <a href="{{ route($isVeterinarian ? 'vet.appointments' : 'staff.appointments.pending') }}" class="btn btn-secondary">Cancel</a>
                 </div>
             </form>
         </div>

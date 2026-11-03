@@ -47,6 +47,8 @@
     </section>
 
     <article class="card medical-report">
+        @include('components.medical-record-print-sheet', ['record' => $record])
+
         <div class="report-section-title">
             <div>
                 <span class="eyebrow">Clinical Report</span>
@@ -100,6 +102,10 @@
                 <div class="label-row label-row--multi">
                     <span>Case/History:</span>
                     <strong>{{ $record->diagnosis ?: 'No case history recorded.' }}</strong>
+                </div>
+                <div class="label-row label-row--multi">
+                    <span>Additional Reason for Visit:</span>
+                    <strong>{{ $record->consultation?->additional_reason_for_visit ?: 'Not recorded' }}</strong>
                 </div>
                 <div class="label-row label-row--multi">
                     <span>Line of Treatment:</span>
@@ -234,34 +240,8 @@
 @endsection
 
 @section('styles')
+    @include('components.print-sheet-styles')
     <style>
-        @media print {
-            body * {
-                visibility: hidden !important;
-            }
-
-            .medical-report,
-            .medical-report * {
-                visibility: visible !important;
-            }
-
-            .medical-report {
-                position: absolute;
-                inset: 0 auto auto 0;
-                width: 100%;
-                margin: 0 !important;
-                box-shadow: none !important;
-            }
-
-            .mini-table-wrap {
-                overflow: visible;
-            }
-
-            .mini-table {
-                min-width: 0;
-            }
-        }
-
         .medical-report {
             background: rgba(255, 255, 255, 0.94);
         }
